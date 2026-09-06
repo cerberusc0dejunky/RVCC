@@ -1,0 +1,6 @@
+{
+  "name": "Fort Smith Scrap & Cleanup",
+  "description": "Simple dispatch portal for scrap metal, appliance removals, and general landfill cleanup hauling with live cost pricing estimation, PDF slip printing, and email crew dispatch.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
