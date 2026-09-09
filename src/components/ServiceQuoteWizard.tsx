@@ -318,7 +318,8 @@ export default function ServiceQuoteWizard() {
 
   const handlePayNow = () => {
     setPaymentChoice("now");
-    window.open("https://checkout.stripe.com/pay/cs_test_1234567890", "_blank", "noopener,noreferrer");
+    const hours = Math.max(1, Math.ceil(estimatedMinutes / 60));
+    window.open(`https://c0dejunky.com/cart/46871135060165:${hours}`, "_blank", "noopener,noreferrer");
   };
 
   const stepLabels = [
@@ -724,21 +725,21 @@ export default function ServiceQuoteWizard() {
                 <button
                   type="button"
                   onClick={handlePayNow}
-                  className="rounded-3xl bg-green-600 text-white px-5 py-4 text-sm font-semibold hover:bg-green-700 transition-all"
+                  className="rounded-3xl bg-green-600 text-white px-5 py-4 text-sm font-semibold hover:bg-green-700 transition-all cursor-pointer"
                 >
-                  Pay Now with Stripe
+                  Pay Online Now (Shopify)
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentChoice("later")}
-                  className="rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all"
+                  className="rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all cursor-pointer"
                 >
                   Pay When Driver Arrives
                 </button>
               </div>
               {paymentChoice === "now" && (
                 <div className="mt-4 rounded-3xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800">
-                  Payment mode selected: pay now. Stripe checkout will open in a new tab.
+                  Payment mode selected: pay now. Secure Shopify checkout will open in a new tab.
                 </div>
               )}
               {paymentChoice === "later" && (

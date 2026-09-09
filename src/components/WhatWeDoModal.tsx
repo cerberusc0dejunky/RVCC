@@ -5,7 +5,6 @@ import {
   ChevronRight, 
   Play, 
   Pause, 
-  Sparkles, 
   CheckCircle2, 
   Truck, 
   Maximize2,
@@ -13,9 +12,10 @@ import {
   ArrowRight
 } from 'lucide-react';
 
-import storageUnitImg from '../../assets/img/Storageunit_ba.jpg';
-import garageBaImg from '../../assets/img/garage_ba.jpg';
-import houseFlipBaImg from '../../assets/img/houseflip_ba.jpg';
+const bedroomBaImg = '/assets/img/bedroom_ba.png';
+const storageUnitImg = '/assets/img/storageunit_ba.png';
+const houseFlipBaImg = '/assets/img/houseflip_ba.jpg';
+const garageBaImg = '/assets/img/garage_ba.jpg';
 
 export interface BeforeAfterSlide {
   id: string;
@@ -33,13 +33,30 @@ export interface BeforeAfterSlide {
 
 export const SLIDES_DATA: BeforeAfterSlide[] = [
   {
+    id: 'bedroom-cleanout',
+    title: 'Tenant Eviction Cleanout',
+    tag: 'Rental Property Turnaround',
+    category: 'Property Management & Evictions',
+    beforeAfterBadge: 'Eviction Cleanup Before & After',
+    subtitle: 'Fast unit restoration to get properties back on the rental market',
+    description: 'Evictions often leave property managers dealing with the aftermath of angry tenants who take their stuff and leave their crap let us help you get it back on the rental market quickly.',
+    keyHighlights: [
+      'Rapid 24-48 hr turnover for property managers & landlords',
+      'All abandoned furniture, bagged trash & debris hauled',
+      'Broom-swept finish ready for contractors or cleaners'
+    ],
+    imageUrl: bedroomBaImg,
+    fallbackUrl: '/assets/img/Bedroom_before_and_after_cleaning_202609042025.jpeg',
+    aspectRatioLabel: 'Wide 16:9'
+  },
+  {
     id: 'storage-unit',
-    title: 'Abandoned Storage Locker Cleanout',
+    title: 'Abandoned Storage Unit Cleanout',
     tag: 'Commercial Storage Facility',
     category: 'Commercial & Property Management',
-    beforeAfterBadge: 'Before / After Half & Half',
+    beforeAfterBadge: 'Storage Purge Before & After',
     subtitle: 'Full unit clearing & sweep-out after tenant abandonment',
-    description: 'We partner with Fort Smith and River Valley storage facility operators to rapidly clean out defaulted or abandoned units. We empty furniture, boxed clutter, and unsorted debris, sweeping the unit down to bare concrete for same-day re-rental.',
+    description: 'An abandoned or unpaid storage unit is nothing but lost revenue and wasted space. Let us haul away the junk and sweep the floor clean, and transform that liability back into a profitable, rent-ready unit so you can recover your bottom line immediately.',
     keyHighlights: [
       'Same-day emergency facility turnarounds',
       'All heavy furniture, bins & bulky scrap removed',
@@ -50,13 +67,30 @@ export const SLIDES_DATA: BeforeAfterSlide[] = [
     aspectRatioLabel: 'Wide Pan 16:9'
   },
   {
+    id: 'property-transformation',
+    title: 'Auction Property & House Flip Overhaul',
+    tag: 'Investor & Renovation Repairs',
+    category: 'Renovation & Property Overhaul',
+    beforeAfterBadge: 'House Flip Overhaul',
+    subtitle: 'From structural decay and debris to sale-ready property',
+    description: 'Purchasing an auction property is stressful enough without inheriting a house full of hazardous debris and structural decay. We specialize in these types of repairs we can patch the roof lay the flooring pretty much overhaul the entire property to help you get it ready to be sold.',
+    keyHighlights: [
+      'Hazardous clutter & demolition debris clearing',
+      'Roof patching, floor laying & property overhaul',
+      'Fast turnaround to help maximize your resale value'
+    ],
+    imageUrl: houseFlipBaImg,
+    fallbackUrl: '/assets/img/houseflip_ba.jpg',
+    aspectRatioLabel: 'Split Comparison'
+  },
+  {
     id: 'garage-cleanout',
     title: 'Suburban Garage & Attic Purge',
     tag: 'Residential Estate Cleanout',
     category: 'Home & Garage Restoration',
-    beforeAfterBadge: 'Before Full Packed State',
+    beforeAfterBadge: 'Garage Clutter Before & After',
     subtitle: 'Restoring vehicle parking from floor-to-ceiling clutter',
-    description: 'Years of accumulation can render a home garage completely unusable. Our two-person crew systematically hauls away old appliances, scrap lumber, obsolete equipment, and hoarded boxes so homeowners can park inside again.',
+    description: 'You want to park your car in the garage but its full of those boxes that you keep meaning to get around to "next week" Let us clear it out and haul it to the dump for you. Reclaim that square footage and car space!',
     keyHighlights: [
       'Floor-to-ceiling sort, carry & load-out',
       'Appliances & metals triaged for recycling',
@@ -65,23 +99,6 @@ export const SLIDES_DATA: BeforeAfterSlide[] = [
     imageUrl: garageBaImg,
     fallbackUrl: '/assets/img/garage_ba.jpg',
     aspectRatioLabel: 'High-Res Wide'
-  },
-  {
-    id: 'property-transformation',
-    title: 'Whole-Room & Property Debris Clearing',
-    tag: 'Property Transformation',
-    category: 'Renovation & Move-Out Cleanup',
-    beforeAfterBadge: 'Side-by-Side Comparison',
-    subtitle: 'From chaotic hoarded room to clean, usable living space',
-    description: 'Whether handling a rental eviction, remodel demolition debris, or an estate settlement, River Valley Cleanup Crew provides the muscle and disposal logistics to transform cluttered indoor and outdoor spaces cleanly and respectfully.',
-    keyHighlights: [
-      'Side-by-side clutter elimination',
-      'Full compliance with Sebastian County landfill rules',
-      'Fast loading without scuffing floors or doorways'
-    ],
-    imageUrl: houseFlipBaImg,
-    fallbackUrl: '/assets/img/houseflip_ba.jpg',
-    aspectRatioLabel: 'Split Comparison'
   }
 ];
 
@@ -188,8 +205,8 @@ export const WhatWeDoModal: React.FC<WhatWeDoModalProps> = ({
                   Before &amp; After Showcase
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 font-mono">
-                Real cleanouts, storage purges, and heavy hauling by River Valley Cleanup Crew in Fort Smith, AR
+              <p className="text-[11px] sm:text-xs text-slate-300 font-mono mt-0.5 leading-snug max-w-2xl">
+                These before-and-after showcases are illustrative examples displaying the types of cleanout and hauling services we perform across the River Valley. Real customer project photos will be added here as new jobs are completed!
               </p>
             </div>
           </div>
@@ -400,23 +417,6 @@ export const WhatWeDoModal: React.FC<WhatWeDoModalProps> = ({
                 })}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Modal Bottom Bar */}
-        <div className="px-4 sm:px-6 py-3 bg-[#141414] border-t border-[#333] flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-          <div className="flex items-center space-x-2 text-slate-400 text-[11px] font-mono">
-            <Sparkles className="w-3.5 h-3.5 text-[#ff6600]" />
-            <span>River Valley Cleanup Crew • Fort Smith &amp; River Valley, AR • Licensed &amp; Insured</span>
-          </div>
-          <div className="flex items-center space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-slate-400 hover:text-white font-mono text-[11px] font-bold underline cursor-pointer"
-            >
-              Back to Estimator
-            </button>
           </div>
         </div>
       </div>

@@ -11,6 +11,8 @@ import {
 } from "firebase/auth";
 
 // Safe, fallback configuration
+export const MAX_IMAGE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB Hardcoded Limit (26,214,400 bytes)
+
 const firebaseConfig = {
   apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || "mock-api-key",
   authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || "mock-app.firebaseapp.com",
@@ -58,6 +60,66 @@ export interface DispatchJob {
   appliances?: Record<string, boolean>;
   specialNotes?: string;
 }
+
+export interface CustomBidRequest {
+  id: string;
+  bidNumber: string;
+  clientName: string;
+  clientPhone: string;
+  clientEmail: string;
+  address: string;
+  zipCode?: string;
+  description: string;
+  imageUrl?: string;
+  imageFileName?: string;
+  imageFileSize?: string;
+  createdAt: string;
+  status: 'pending_bid' | 'bid_submitted' | 'accepted' | 'declined';
+  bidAmount?: number;
+  bidNotes?: string;
+  bidEquipment?: string;
+  bidDateEstimate?: string;
+  bidSubmittedAt?: string;
+}
+
+// Initial sample custom bids for contractor bidding
+const SAMPLE_CUSTOM_BIDS: CustomBidRequest[] = [
+  {
+    id: "bid-201",
+    bidNumber: "BID-392180",
+    clientName: "David Miller",
+    clientPhone: "(479) 420-9182",
+    clientEmail: "david.miller@fortsmithrealty.com",
+    address: "3412 Free Ferry Rd",
+    zipCode: "72903",
+    description: "Backyard storm debris & heavy fallen oak limbs. Need cut, loaded on trailer and hauled away with rake sweep.",
+    imageUrl: "/assets/img/garage_ba.jpg",
+    imageFileName: "storm_debris.jpg",
+    imageFileSize: "3.2 MB",
+    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+    status: "bid_submitted",
+    bidAmount: 275.00,
+    bidEquipment: "White Dodge Ram + 14ft Tandem Trailer",
+    bidDateEstimate: "Thursday Morning (9:00 AM)",
+    bidNotes: "Can load and haul all limbs in 1 tandem load. Price includes Sebastian County green waste fees and broom sweep.",
+    bidSubmittedAt: new Date(Date.now() - 3600000 * 12).toISOString()
+  },
+  {
+    id: "bid-202",
+    bidNumber: "BID-881944",
+    clientName: "Marcus Vance",
+    clientPhone: "(479) 353-8120",
+    clientEmail: "m.vance@gmail.com",
+    address: "1204 S 21st St",
+    zipCode: "72901",
+    description: "Old dilapidated metal shed tear down in alleyway with rusted tin siding, wood framing, and scrap parts inside.",
+    imageUrl: "/assets/img/houseflip_ba.jpg",
+    imageFileName: "shed_tear_down.jpg",
+    imageFileSize: "4.8 MB",
+    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+    status: "pending_bid"
+  }
+];
 
 // Initial sample jobs for operator showcase
 const SAMPLE_JOBS: DispatchJob[] = [
@@ -123,32 +185,33 @@ const SAMPLE_JOBS: DispatchJob[] = [
 
 // Simple local fallback database using localStorage
 const localDb = {
-  getDocs(colName: string): DispatchJob[] {
+  getDocs(colName: string): any[] {
     const existing = localStorage.getItem(colName);
     if (!existing) {
-      localStorage.setItem(colName, JSON.stringify(SAMPLE_JOBS));
-      return SAMPLE_JOBS;
+      const initialData = colName === 'custom_bids' ? SAMPLE_CUSTOM_BIDS : SAMPLE_JOBS;
+      localStorage.setItem(colName, JSON.stringify(initialData));
+      return initialData;
     }
     try {
       return JSON.parse(existing);
     } catch {
-      return SAMPLE_JOBS;
+      return colName === 'custom_bids' ? SAMPLE_CUSTOM_BIDS : SAMPLE_JOBS;
     }
   },
-  addDoc(colName: string, data: any): DispatchJob {
+  addDoc(colName: string, data: any): any {
     const current = localDb.getDocs(colName);
     const docWithId = {
       id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      status: 'scheduled',
+      ...(colName === 'bookings' ? { status: 'scheduled' } : { status: 'pending_bid' }),
       ...data
     };
     current.unshift(docWithId);
     localStorage.setItem(colName, JSON.stringify(current));
     return docWithId;
   },
-  updateDoc(colName: string, id: string, updates: Partial<DispatchJob>): boolean {
+  updateDoc(colName: string, id: string, updates: Record<string, any>): boolean {
     const current = localDb.getDocs(colName);
-    const idx = current.findIndex(j => j.id === id || j.ticketNumber === id);
+    const idx = current.findIndex(j => j.id === id || j.ticketNumber === id || j.bidNumber === id);
     if (idx !== -1) {
       current[idx] = { ...current[idx], ...updates };
       localStorage.setItem(colName, JSON.stringify(current));
@@ -223,6 +286,61 @@ export async function getBookingCountForAddressAndDate(address: string, date: st
     b.contactAddress?.trim().toLowerCase() === address.trim().toLowerCase()
   );
   return matching.length;
+}
+
+// -------------------------------------------------------------
+// Custom Job Requests & Contractor Bidding
+// -------------------------------------------------------------
+export async function saveCustomBidRequest(bid: Omit<CustomBidRequest, 'id' | 'bidNumber' | 'createdAt' | 'status'> & { id?: string; bidNumber?: string }): Promise<{ success: boolean; id: string; bidNumber: string }> {
+  const bidNumber = bid.bidNumber || `BID-${Math.floor(100000 + Math.random() * 900000)}`;
+  const dataToSave: Partial<CustomBidRequest> = {
+    ...bid,
+    bidNumber,
+    status: 'pending_bid',
+    createdAt: new Date().toISOString()
+  };
+
+  if (db && isRealFirebase) {
+    try {
+      const colRef = collection(db, "custom_bids");
+      const docRef = await addDoc(colRef, dataToSave);
+      localDb.addDoc("custom_bids", { ...dataToSave, id: docRef.id });
+      return { success: true, id: docRef.id, bidNumber };
+    } catch (e: any) {
+      console.warn("Could not save custom bid to remote Firebase, using local database:", e);
+    }
+  }
+  const localDoc = localDb.addDoc("custom_bids", dataToSave);
+  return { success: true, id: localDoc.id, bidNumber: localDoc.bidNumber };
+}
+
+export async function getAllCustomBids(): Promise<CustomBidRequest[]> {
+  if (db && isRealFirebase) {
+    try {
+      const querySnapshot = await getDocs(collection(db, "custom_bids"));
+      if (!querySnapshot.empty) {
+        return querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as CustomBidRequest));
+      }
+    } catch (e) {
+      console.warn("Could not load custom bids from remote Firebase, using local storage:", e);
+    }
+  }
+  return localDb.getDocs("custom_bids");
+}
+
+export async function updateCustomBid(
+  bidId: string, 
+  updates: Partial<CustomBidRequest>
+): Promise<boolean> {
+  if (db && isRealFirebase) {
+    try {
+      const bidRef = doc(db, "custom_bids", bidId);
+      await updateDoc(bidRef, updates as any);
+    } catch (e) {
+      console.warn("Could not update remote custom bid, updating local copy:", e);
+    }
+  }
+  return localDb.updateDoc("custom_bids", bidId, updates);
 }
 
 // -------------------------------------------------------------

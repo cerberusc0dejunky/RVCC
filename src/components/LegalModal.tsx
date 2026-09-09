@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, ShieldCheck, FileText, Trash2, ExternalLink } from 'lucide-react';
-import logoImg from '../../assets/img/logoRVCC.png';
+const logoImg = '/assets/img/logoRVCC.png';
 
 export type LegalDocType = 'terms' | 'privacy' | 'deletion';
 

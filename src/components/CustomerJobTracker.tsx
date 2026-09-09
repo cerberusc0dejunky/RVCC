@@ -5,20 +5,23 @@ import {
   ExternalLink, Sparkles, FileText, Check, ChevronRight
 } from 'lucide-react';
 import { DispatchJob, getAllBookings } from '../lib/firebase';
-import logoImg from '../../assets/img/logoRVCC.png';
-import dodgeTruckImg from '../../assets/img/Dodge_truck.jpeg';
+const logoImg = '/assets/img/logoRVCC.png';
+const dodgeTruckImg = '/assets/img/Dodge_truck.jpeg';
 
 interface CustomerJobTrackerProps {
   initialTicketNumber?: string;
-  onBackToEstimator: () => void;
+  onBackToEstimator?: () => void;
+  onNavigateToEstimator?: () => void;
   onOpenOperatorDashboard?: () => void;
 }
 
 export const CustomerJobTracker: React.FC<CustomerJobTrackerProps> = ({
   initialTicketNumber,
   onBackToEstimator,
+  onNavigateToEstimator,
   onOpenOperatorDashboard
 }) => {
+  const handleBack = onBackToEstimator || onNavigateToEstimator || (() => {});
   const [ticketInput, setTicketInput] = useState<string>(initialTicketNumber || '');
   const [currentJob, setCurrentJob] = useState<DispatchJob | null>(null);
   const [allJobs, setAllJobs] = useState<DispatchJob[]>([]);
@@ -98,7 +101,7 @@ export const CustomerJobTracker: React.FC<CustomerJobTrackerProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onBackToEstimator}
+              onClick={handleBack}
               className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-mono font-bold px-3 py-1.5 rounded border border-slate-700 flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />

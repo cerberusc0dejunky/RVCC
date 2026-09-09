@@ -3,10 +3,20 @@ import {
   Truck, Calendar, MapPin, Phone, Mail, CheckCircle2, 
   Clock, AlertCircle, RefreshCw, ChevronRight, Search, 
   Filter, DollarSign, FileText, ArrowLeft, Send, Sparkles,
-  ExternalLink, Printer, ShieldCheck, Check, Facebook, Copy, MessageCircle
+  ExternalLink, Printer, ShieldCheck, Check, Facebook, Copy, MessageCircle,
+  UploadCloud, Image, X
 } from 'lucide-react';
-import { DispatchJob, getAllBookings, updateBookingStatus } from '../lib/firebase';
-import logoImg from '../../assets/img/logoRVCC.png';
+import { 
+  DispatchJob, 
+  CustomBidRequest, 
+  getAllBookings, 
+  getAllCustomBids, 
+  updateBookingStatus, 
+  updateCustomBid 
+} from '../lib/firebase';
+import { ReceiptModal } from './ReceiptModal';
+import { HusbandBiddingDesk } from './HusbandBiddingDesk';
+const logoImg = '/assets/img/logoRVCC.png';
 
 interface DispatchDashboardProps {
   onBackToEstimator?: () => void;
@@ -32,22 +42,78 @@ export const DispatchDashboard: React.FC<DispatchDashboardProps> = ({
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  // Custom Bidding Section State
+  const [activeSection, setActiveSection] = useState<'bookings' | 'custom_bids'>('bookings');
+  const [customBids, setCustomBids] = useState<CustomBidRequest[]>([]);
+  const [selectedBid, setSelectedBid] = useState<CustomBidRequest | null>(null);
+  const [bidPriceInput, setBidPriceInput] = useState<string>('');
+  const [bidEquipmentInput, setBidEquipmentInput] = useState<string>('White Dodge Ram + 14ft Tandem Trailer');
+  const [bidDateInput, setBidDateInput] = useState<string>('This Thursday Morning (8:00 AM – 12:00 PM)');
+  const [bidNotesInput, setBidNotesInput] = useState<string>('');
+  const [submittingBid, setSubmittingBid] = useState<boolean>(false);
+  const [receiptJob, setReceiptJob] = useState<DispatchJob | null>(null);
+  const [bidFilter, setBidFilter] = useState<'all' | 'pending' | 'submitted' | 'accepted'>('all');
+
   const copyText = (text: string, fieldId: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(fieldId);
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const loadJobs = async () => {
+  const loadData = async () => {
     setLoading(true);
-    const data = await getAllBookings();
-    setJobs(data);
+    const [jobsData, bidsData] = await Promise.all([
+      getAllBookings(),
+      getAllCustomBids()
+    ]);
+    setJobs(jobsData);
+    setCustomBids(bidsData);
     setLoading(false);
   };
 
   useEffect(() => {
-    loadJobs();
+    loadData();
   }, []);
+
+  const handleSelectBid = (bid: CustomBidRequest) => {
+    setSelectedBid(bid);
+    setBidPriceInput(bid.bidAmount ? bid.bidAmount.toString() : '');
+    setBidEquipmentInput(bid.bidEquipment || 'White Dodge Ram + 14ft Tandem Trailer');
+    setBidDateInput(bid.bidDateEstimate || 'This Thursday Morning (8:00 AM – 12:00 PM)');
+    setBidNotesInput(bid.bidNotes || 'Includes Sebastian County Landfill fees, transport, and broom clean sweep.');
+  };
+
+  const handleSendBidToCustomer = async (bidId: string) => {
+    const price = parseFloat(bidPriceInput);
+    if (isNaN(price) || price <= 0) {
+      alert("Please enter a valid bid dollar amount.");
+      return;
+    }
+    setSubmittingBid(true);
+    await updateCustomBid(bidId, {
+      status: 'bid_submitted',
+      bidAmount: price,
+      bidEquipment: bidEquipmentInput,
+      bidDateEstimate: bidDateInput,
+      bidNotes: bidNotesInput,
+      bidSubmittedAt: new Date().toISOString()
+    });
+    const updatedBids = await getAllCustomBids();
+    setCustomBids(updatedBids);
+    if (selectedBid && selectedBid.id === bidId) {
+      setSelectedBid(prev => prev ? { 
+        ...prev, 
+        status: 'bid_submitted', 
+        bidAmount: price, 
+        bidEquipment: bidEquipmentInput, 
+        bidDateEstimate: bidDateInput, 
+        bidNotes: bidNotesInput,
+        bidSubmittedAt: new Date().toISOString()
+      } : null);
+    }
+    setSubmittingBid(false);
+    alert(`Bid of $${price.toFixed(2)} successfully transmitted to customer! They can view and accept it on their account page.`);
+  };
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -77,7 +143,7 @@ export const DispatchDashboard: React.FC<DispatchDashboardProps> = ({
   const handleStatusUpdate = async (jobId: string, newStatus: DispatchJob['status']) => {
     setUpdatingId(jobId);
     await updateBookingStatus(jobId, newStatus);
-    await loadJobs();
+    await loadData();
     if (selectedJob && selectedJob.id === jobId) {
       setSelectedJob(prev => prev ? { ...prev, status: newStatus } : null);
     }
@@ -89,7 +155,7 @@ export const DispatchDashboard: React.FC<DispatchDashboardProps> = ({
     const currentNotes = selectedJob?.notes ? `${selectedJob.notes}\n• ${newNote.trim()}` : `• ${newNote.trim()}`;
     await updateBookingStatus(jobId, selectedJob?.status || 'scheduled', currentNotes);
     setNewNote('');
-    await loadJobs();
+    await loadData();
     if (selectedJob) {
       setSelectedJob(prev => prev ? { ...prev, notes: currentNotes } : null);
     }
@@ -131,7 +197,7 @@ export const DispatchDashboard: React.FC<DispatchDashboardProps> = ({
           <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={loadJobs}
+              onClick={loadData}
               className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 border border-slate-700 cursor-pointer transition-colors shadow-xs"
               title="Refresh jobs"
             >
@@ -172,10 +238,73 @@ export const DispatchDashboard: React.FC<DispatchDashboardProps> = ({
         </div>
       </section>
 
+      {/* Section Switcher: Bookings vs Husband's Bidding Desk */}
+      <div className="bg-slate-900 border-b border-slate-800 px-4 sm:px-8 py-2.5">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveSection('bookings')}
+              className={`px-4 py-2 rounded-lg text-xs font-mono font-black uppercase transition-all flex items-center gap-2 cursor-pointer ${
+                activeSection === 'bookings'
+                  ? 'bg-[#ff6600] text-slate-950 shadow-md'
+                  : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+              }`}
+            >
+              <Truck className="w-4 h-4" />
+              <span>Dispatched Cleanouts &amp; Hauls ({jobs.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSection('custom_bids')}
+              className={`px-4 py-2 rounded-lg text-xs font-mono font-black uppercase transition-all flex items-center gap-2 cursor-pointer relative ${
+                activeSection === 'custom_bids'
+                  ? 'bg-[#ff6600] text-slate-950 shadow-md'
+                  : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>Custom Job Bids (Husband's Bidding Desk)</span>
+              {customBids.filter(b => b.status === 'pending_bid').length > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-mono font-black px-1.5 py-0.2 rounded-full animate-bounce">
+                  {customBids.filter(b => b.status === 'pending_bid').length} NEW
+                </span>
+              )}
+            </button>
+          </div>
+
+          <div className="text-xs font-mono text-slate-400 hidden sm:block">
+            {activeSection === 'custom_bids' 
+              ? 'Review photos & send direct price quotes to customer accounts' 
+              : 'Track lined-up hauls, dump fees, and print customer receipts'}
+          </div>
+        </div>
+      </div>
+
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto w-full p-4 sm:p-6 flex-1 flex flex-col lg:flex-row gap-6">
-        {/* Left Column: Job List & Filters */}
-        <div className="flex-1 space-y-4">
+      <main className="max-w-7xl mx-auto w-full p-4 sm:p-6 flex-1 flex flex-col">
+        {activeSection === 'custom_bids' ? (
+          <HusbandBiddingDesk 
+            customBids={customBids}
+            onRefresh={loadData}
+            onSendBid={async (bidId, bidData) => {
+              await updateCustomBid(bidId, {
+                status: 'bid_submitted',
+                bidAmount: bidData.amount,
+                bidEquipment: bidData.equipment,
+                bidDateEstimate: bidData.dateEstimate,
+                bidNotes: bidData.notes,
+                bidSubmittedAt: new Date().toISOString()
+              });
+              await loadData();
+              alert(`Bid of $${bidData.amount.toFixed(2)} sent directly to customer account!`);
+            }}
+          />
+        ) : (
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Left Column: Job List & Filters */}
+            <div className="flex-1 space-y-4">
           {/* Filter & Search Controls */}
           <div className="bg-white p-3.5 rounded-xl border border-slate-300 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="relative w-full sm:w-72">
@@ -323,17 +452,31 @@ export const DispatchDashboard: React.FC<DispatchDashboardProps> = ({
                         ))}
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onViewJobInTracker) onViewJobInTracker(job.ticketNumber);
-                        }}
-                        className="text-[10px] font-mono text-slate-500 hover:text-[#d95500] underline inline-flex items-center gap-1 cursor-pointer font-bold"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        <span>Customer Tracker View</span>
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReceiptJob(job);
+                          }}
+                          className="text-[10px] font-mono text-slate-700 hover:text-black underline inline-flex items-center gap-1 cursor-pointer font-bold"
+                        >
+                          <FileText className="w-3 h-3 text-[#ff6600]" />
+                          <span>Print Receipt</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onViewJobInTracker) onViewJobInTracker(job.ticketNumber);
+                          }}
+                          className="text-[10px] font-mono text-slate-500 hover:text-[#d95500] underline inline-flex items-center gap-1 cursor-pointer font-bold"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Customer Tracker View</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -436,16 +579,27 @@ export const DispatchDashboard: React.FC<DispatchDashboardProps> = ({
                 </div>
 
                 <div className="pt-2 border-t border-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onViewJobInTracker) onViewJobInTracker(selectedJob.ticketNumber);
-                    }}
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-xs py-2.5 rounded-lg text-center flex items-center justify-center gap-1.5 border border-slate-300 cursor-pointer shadow-xs"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Preview Customer Status View</span>
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setReceiptJob(selectedJob)}
+                      className="w-full bg-slate-900 hover:bg-black text-white font-mono font-bold text-xs py-2.5 rounded-lg text-center flex items-center justify-center gap-1.5 border border-slate-800 cursor-pointer shadow-xs"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-[#ff6600]" />
+                      <span>View &amp; Print Official Receipt</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onViewJobInTracker) onViewJobInTracker(selectedJob.ticketNumber);
+                      }}
+                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono font-bold text-xs py-2 rounded-lg text-center flex items-center justify-center gap-1.5 border border-slate-300 cursor-pointer shadow-xs"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Preview Customer Status View</span>
+                    </button>
+                  </div>
                 </div>
 
               </div>
@@ -566,9 +720,17 @@ export const DispatchDashboard: React.FC<DispatchDashboardProps> = ({
             </div>
 
           </div>
-
         </div>
+      </div>
+      )}
       </main>
+
+      {/* Official Receipt Modal */}
+      <ReceiptModal
+        isOpen={!!receiptJob}
+        onClose={() => setReceiptJob(null)}
+        job={receiptJob}
+      />
     </div>
   );
 };

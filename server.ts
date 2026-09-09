@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
-import Stripe from "stripe";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -203,6 +202,69 @@ Return ONLY a valid JSON object matching the requested schema.`;
       }
 
       const result = JSON.parse(text.trim());
+
+      // Hour estimation logic from Gemini
+      const estimatedHours = Math.max(1, Math.round(Number(result.estimatedLaborHours || 1)));
+
+      // Shopify Storefront API cart creation
+      const shopifyEndpoint = "https://c0dejunky.com/api/2024-01/graphql.json";
+      const storefrontAccessToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "YOUR_SHOPIFY_STOREFRONT_ACCESS_TOKEN";
+
+      const cartMutation = `
+        mutation cartCreate($input: CartInput!) {
+          cartCreate(input: $input) {
+            cart {
+              id
+              checkoutUrl
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      let checkoutUrl = `https://c0dejunky.com/cart/46871135060165:${estimatedHours}`;
+
+      try {
+        const shopifyRes = await fetch(shopifyEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Storefront-Access-Token": storefrontAccessToken
+          },
+          body: JSON.stringify({
+            query: cartMutation,
+            variables: {
+              input: {
+                lines: [
+                  {
+                    merchandiseId: "gid://shopify/ProductVariant/46871135060165",
+                    quantity: estimatedHours
+                  }
+                ]
+              }
+            }
+          })
+        });
+
+        if (shopifyRes.ok) {
+          const shopifyData: any = await shopifyRes.json();
+          const extractedUrl = shopifyData?.data?.cartCreate?.cart?.checkoutUrl;
+          if (extractedUrl) {
+            checkoutUrl = extractedUrl;
+          } else if (shopifyData?.data?.cartCreate?.userErrors?.length) {
+            console.warn("Shopify cartCreate userErrors:", shopifyData.data.cartCreate.userErrors);
+          }
+        }
+      } catch (shopifyErr) {
+        console.error("Shopify cart creation error:", shopifyErr);
+      }
+
+      result.checkoutUrl = checkoutUrl;
+      result.url = checkoutUrl;
+
       return res.json(result);
     } catch (error: any) {
       console.error("Gemini Error:", error);
@@ -269,58 +331,81 @@ Return ONLY a valid JSON object matching the requested schema.`;
     }
   });
 
-  // 2. API Endpoint: Create Stripe checkout session
+  // 2. API Endpoint: Create Shopify checkout cart via Storefront API
   app.post("/api/create-checkout-session", async (req, res) => {
     try {
-      const { items, total, contactEmail } = req.body;
-      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      const { hours, estimatedLaborHours, total } = req.body;
+      const quantity = Math.max(1, Math.round(Number(hours || estimatedLaborHours || (total ? Math.max(1, Math.round(total / 75)) : 2))));
 
-      if (!stripeKey) {
-        // If Stripe secret key is not set, we instruct the client to use our gorgeous high-fidelity checkout simulation
-        return res.json({
-          simulated: true,
-          message: "Stripe key not configured. Using high-fidelity local checkout simulation.",
+      const shopifyEndpoint = "https://c0dejunky.com/api/2024-01/graphql.json";
+      const storefrontAccessToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "YOUR_SHOPIFY_STOREFRONT_ACCESS_TOKEN";
+
+      const cartMutation = `
+        mutation cartCreate($input: CartInput!) {
+          cartCreate(input: $input) {
+            cart {
+              id
+              checkoutUrl
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      const shopifyPayload = {
+        query: cartMutation,
+        variables: {
+          input: {
+            lines: [
+              {
+                merchandiseId: "gid://shopify/ProductVariant/46871135060165",
+                quantity
+              }
+            ]
+          }
+        }
+      };
+
+      let checkoutUrl = `https://c0dejunky.com/cart/46871135060165:${quantity}`;
+
+      try {
+        const shopifyRes = await fetch(shopifyEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Storefront-Access-Token": storefrontAccessToken
+          },
+          body: JSON.stringify(shopifyPayload)
         });
+
+        if (shopifyRes.ok) {
+          const shopifyData: any = await shopifyRes.json();
+          const extractedUrl = shopifyData?.data?.cartCreate?.cart?.checkoutUrl;
+          if (extractedUrl) {
+            checkoutUrl = extractedUrl;
+          } else if (shopifyData?.data?.cartCreate?.userErrors?.length) {
+            console.warn("Shopify cartCreate userErrors:", shopifyData.data.cartCreate.userErrors);
+          }
+        } else {
+          const errText = await shopifyRes.text();
+          console.error("Shopify Storefront API error:", shopifyRes.status, errText);
+        }
+      } catch (shopifyErr) {
+        console.error("Shopify checkout request error:", shopifyErr);
       }
 
-      const stripe = new Stripe(stripeKey, {
-        apiVersion: "2025-02-18-preview" as any,
+      return res.json({
+        checkoutUrl,
+        url: checkoutUrl
       });
-
-      // Construct line items
-      const lineItems = [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: "Fort Smith Scrap & Cleanup Dispatched Hauling Service",
-              description: `Junk pickup & environmental landfill transfer. Items: ${items}`,
-            },
-            unit_amount: Math.round(total * 100), // Stripe expects cents
-          },
-          quantity: 1,
-        },
-      ];
-
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: lineItems,
-        mode: "payment",
-        customer_email: contactEmail || undefined,
-        success_url: `${req.headers.origin}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${req.headers.origin}?checkout=cancelled`,
-      });
-
-      return res.json({ id: session.id, url: session.url });
     } catch (error: any) {
-      console.error("Stripe Session Error:", error);
-      return res.status(500).json({ error: error.message || "Failed to initiate Stripe session" });
+      console.error("Shopify Checkout Error:", error);
+      return res.status(500).json({ error: error.message || "Failed to initiate Shopify checkout" });
     }
   });
-
-  // Serve assets directory statically for before/after media
-  app.use("/assets", express.static(path.join(process.cwd(), "public", "assets")));
-  app.use("/assets", express.static(path.join(process.cwd(), "assets")));
 
   // Serve static files / Vite middleware
   if (process.env.NODE_ENV !== "production") {
@@ -332,6 +417,7 @@ Return ONLY a valid JSON object matching the requested schema.`;
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+    app.use("/assets", express.static(path.join(process.cwd(), "public", "assets")));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
