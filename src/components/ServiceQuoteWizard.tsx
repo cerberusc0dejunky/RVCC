@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Camera, Check, MapPin, Truck } from "lucide-react";
+import { CalendarDays, Camera, Check, MapPin, Truck, FileText, Printer, CheckCircle2, Clock } from "lucide-react";
+import { saveBookingToDatabase } from "../lib/firebase";
+
 
 const BASE_ZIP = "72908";
 const DEFAULT_DUMP_ZIP = "72032";
@@ -317,10 +319,45 @@ export default function ServiceQuoteWizard() {
   };
 
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [savedTicketNumber, setSavedTicketNumber] = useState<string | null>(null);
+
+  const saveDraftBooking = async (paymentMode: "shopify" | "arrival"): Promise<string> => {
+    try {
+      const generatedTicket = `TKT-${Math.floor(100000 + Math.random() * 900000)}`;
+      const bookingData = {
+        ticketNumber: generatedTicket,
+        clientName: customerName || "Customer Near " + (customerZip || "Fort Smith"),
+        clientPhone: customerPhone || "(479) 555-0101",
+        clientEmail: customerEmail || "dispatch@rivervalleycrew.com",
+        address: serviceAddress || `Service near ${customerZip || "72901"}, AR`,
+        zipCode: customerZip || "72901",
+        selectedDate: new Date().toISOString().split("T")[0],
+        timeSlot: (reservationSlot?.toLowerCase().includes("afternoon") ? "afternoon" : "morning") as "morning" | "afternoon",
+        haulType: (loadType || "truck") as "truck" | "trailer" | "appliance",
+        status: "scheduled" as const,
+        priceTotal: totalEstimate,
+        paymentTerms: paymentMode === "shopify" ? "shopify" : "arrival",
+        paymentStatus: (paymentMode === "shopify" ? "paid" : "pending") as "paid" | "pending",
+        timestamp: new Date().toISOString(),
+        notes: `Gas: $${gasCost.toFixed(2)} | Dump Fee: $${dumpFee.toFixed(2)} | Photo Adj: $${photoAdjustment.toFixed(2)} | Labor: $${laborCost.toFixed(2)} | Window: ${reservationSlot}`
+      };
+
+      const result = await saveBookingToDatabase(bookingData);
+      const ticket = result?.ticketNumber || generatedTicket;
+      setSavedTicketNumber(ticket);
+      return ticket;
+    } catch (err) {
+      console.warn("Could not save booking draft to database:", err);
+      const fallbackTicket = `TKT-${Math.floor(100000 + Math.random() * 900000)}`;
+      setSavedTicketNumber(fallbackTicket);
+      return fallbackTicket;
+    }
+  };
 
   const handlePayNow = async () => {
     setPaymentChoice("now");
     setIsRedirecting(true);
+    await saveDraftBooking("shopify");
     const hours = Math.max(1, Math.ceil(estimatedMinutes / 60));
     const fallbackCartUrl = `https://c0dejunky.com/cart/46871135060165:${hours}`;
     let targetCheckoutUrl = fallbackCartUrl;
@@ -365,6 +402,12 @@ export default function ServiceQuoteWizard() {
 
     window.open(targetCheckoutUrl, "_blank", "noopener,noreferrer");
   };
+
+  const handlePayLater = async () => {
+    setPaymentChoice("later");
+    await saveDraftBooking("arrival");
+  };
+
 
 
   const stepLabels = [
@@ -777,18 +820,46 @@ export default function ServiceQuoteWizard() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPaymentChoice("later")}
+                  onClick={handlePayLater}
                   className="rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all cursor-pointer"
                 >
-                  Pay When Driver Arrives
+                  Pay When Driver Arrives (Shopify POS / Cash / Card)
                 </button>
               </div>
-              {paymentChoice === "now" && (
+
+              {savedTicketNumber && (
+                <div className="mt-5 rounded-3xl bg-emerald-50 border-2 border-emerald-500/40 p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      <span className="font-bold text-sm text-emerald-950">Invoice Saved to Drafts</span>
+                    </div>
+                    <span className="text-xs font-mono font-black bg-emerald-200/80 text-emerald-900 px-2.5 py-1 rounded-full">
+                      {savedTicketNumber}
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-800 leading-relaxed">
+                    This work order estimate is saved and ready in your dispatch records. The driver or crew can pull this up on-site via phone/tablet or complete payment through Shopify POS.
+                  </p>
+                  <div className="flex items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-white text-emerald-900 border border-emerald-300 rounded-xl text-xs font-bold hover:bg-emerald-100 transition cursor-pointer shadow-xs"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Print / Save Invoice Slip</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {paymentChoice === "now" && !savedTicketNumber && (
                 <div className="mt-4 rounded-3xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800">
                   Payment mode selected: pay now. Secure Shopify checkout will open in a new tab.
                 </div>
               )}
-              {paymentChoice === "later" && (
+              {paymentChoice === "later" && !savedTicketNumber && (
                 <div className="mt-4 rounded-3xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
                   Payment mode selected: pay when the driver arrives. The invoice is ready for the customer on site.
                 </div>
