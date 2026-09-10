@@ -316,11 +316,56 @@ export default function ServiceQuoteWizard() {
     }
   };
 
-  const handlePayNow = () => {
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  const handlePayNow = async () => {
     setPaymentChoice("now");
+    setIsRedirecting(true);
     const hours = Math.max(1, Math.ceil(estimatedMinutes / 60));
-    window.open(`https://c0dejunky.com/cart/46871135060165:${hours}`, "_blank", "noopener,noreferrer");
+    const fallbackCartUrl = `https://c0dejunky.com/cart/46871135060165:${hours}`;
+    let targetCheckoutUrl = fallbackCartUrl;
+
+    try {
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hours,
+          estimatedLaborHours: hours,
+          totalEstimate,
+          customerZip,
+          serviceAddress,
+          customerName,
+          customerPhone,
+          customerEmail
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.checkoutUrl || data?.url) {
+          targetCheckoutUrl = data.checkoutUrl || data.url;
+        }
+      }
+    } catch (err) {
+      console.warn("Edge checkout session endpoint unavailable, falling back to direct Shopify cart:", err);
+    }
+
+    setIsRedirecting(false);
+
+    // If embedded inside Shopify iframe (e.g. on c0dejunky.com), breakout to top window
+    const isEmbeddedInIframe = window.top && window.top !== window;
+    if (isEmbeddedInIframe) {
+      try {
+        window.top!.location.href = targetCheckoutUrl;
+        return;
+      } catch (e) {
+        console.warn("Cross-origin top window navigation prevented; opening in new tab:", e);
+      }
+    }
+
+    window.open(targetCheckoutUrl, "_blank", "noopener,noreferrer");
   };
+
 
   const stepLabels = [
     "Zip Code",
@@ -725,9 +770,10 @@ export default function ServiceQuoteWizard() {
                 <button
                   type="button"
                   onClick={handlePayNow}
-                  className="rounded-3xl bg-green-600 text-white px-5 py-4 text-sm font-semibold hover:bg-green-700 transition-all cursor-pointer"
+                  disabled={isRedirecting}
+                  className="rounded-3xl bg-green-600 text-white px-5 py-4 text-sm font-semibold hover:bg-green-700 transition-all cursor-pointer disabled:opacity-60"
                 >
-                  Pay Online Now (Shopify)
+                  {isRedirecting ? "Preparing Checkout..." : "Pay Online Now (Shopify)"}
                 </button>
                 <button
                   type="button"

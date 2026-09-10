@@ -1,6 +1,19 @@
 // functions/api/create-checkout-session.js
 // Cloudflare Pages Function: Create Shopify Checkout Cart using Storefront API at the edge
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+export async function onRequestOptions() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 export async function onRequestPost(context) {
   try {
     const { request, env } = context;
@@ -67,13 +80,32 @@ export async function onRequestPost(context) {
       console.error("Shopify cart creation error:", shopifyErr);
     }
 
-    return Response.json({
-      checkoutUrl,
-      url: checkoutUrl
-    });
+    return new Response(
+      JSON.stringify({
+        checkoutUrl,
+        url: checkoutUrl
+      }),
+      {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      }
+    );
   } catch (err) {
     console.error("Shopify checkout function error:", err);
-    return Response.json({ error: err.message || "Failed to create Shopify checkout session" }, { status: 500 });
+    return new Response(
+      JSON.stringify({ error: err.message || "Failed to create Shopify checkout session" }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      }
+    );
   }
 }
+
 

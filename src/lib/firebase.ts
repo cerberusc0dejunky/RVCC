@@ -3,7 +3,6 @@ import { getFirestore, collection, addDoc, getDocs, updateDoc, doc } from "fireb
 import { 
   getAuth, 
   GoogleAuthProvider, 
-  FacebookAuthProvider, 
   signInWithPopup, 
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -351,7 +350,7 @@ export interface AuthUserProfile {
   displayName: string;
   email: string;
   photoURL?: string;
-  provider: 'google' | 'facebook' | 'demo';
+  provider: 'google' | 'demo';
   role: 'operator' | 'customer';
 }
 
@@ -415,46 +414,6 @@ export async function signInWithGoogleAuth(): Promise<AuthUserProfile> {
   return profile;
 }
 
-export async function signInWithFacebookAuth(asAdmin: boolean = false): Promise<AuthUserProfile> {
-  let profile: AuthUserProfile;
-  if (auth && isRealFirebase) {
-    try {
-      const provider = new FacebookAuthProvider();
-      if (asAdmin) {
-        provider.addScope('pages_show_list');
-        provider.addScope('pages_read_engagement');
-        provider.addScope('pages_manage_posts');
-      }
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      profile = {
-        uid: user.uid,
-        displayName: user.displayName || (asAdmin ? "River Valley Page Admin" : "Facebook User"),
-        email: user.email || "",
-        photoURL: user.photoURL || undefined,
-        provider: 'facebook',
-        role: asAdmin ? 'operator' : 'customer'
-      };
-      setStoredAuthUser(profile);
-      return profile;
-    } catch (e: any) {
-      console.warn("Facebook Sign-In with real Firebase failed/cancelled, using simulated profile:", e);
-    }
-  }
-  // Seamless client-side demo fallback
-  profile = {
-    uid: "fb-" + (asAdmin ? "admin-" : "client-") + Date.now(),
-    displayName: asAdmin ? "RVCC Page Admin (Facebook)" : "Jane Cooper (Meta)",
-    email: asAdmin ? "dispatch@rivervalleycrew.com" : "jane.cooper@rivervalleymail.com",
-    photoURL: asAdmin 
-      ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120&h=120"
-      : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120&h=120",
-    provider: 'facebook',
-    role: asAdmin ? 'operator' : 'customer'
-  };
-  setStoredAuthUser(profile);
-  return profile;
-}
 
 export async function signOutAuth(): Promise<void> {
   setStoredAuthUser(null);

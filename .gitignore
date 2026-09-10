@@ -7,3 +7,18 @@ coverage/
 .env*
 !.env.example
 *.zip
+
+# NotebookLM compilation & compilation scripts
+.notebooklm/
+.NotebookLM/
+compile_notebooklm.py
+scode.py
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Internal tracking & agent instructions
+tokenusage.md
+ide-agent-refactoring-instructions.xml
+

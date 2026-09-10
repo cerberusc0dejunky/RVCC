@@ -1,15 +1,8 @@
 # Token Usage Log
 
-| Turn | Timestamp | Est. Message Tokens | Cumulative Session Tokens | Status / Alerts |
-| :--- | :--- | :--- | :--- | :--- |
-| 1 of 5 | 2026-09-04 10:50:01 | ~14,200 tokens | > 10,000 tokens | ⚠️ **10,000 Token Limit Exceeded** - Alerted User |
-| 2 of 5 | 2026-09-04 10:55:33 | ~1,300 tokens | > 15,000 tokens | ⚠️ **> 10,000 Token Alert Maintained** |
-| 3 of 5 | 2026-09-04 10:55:56 | ~1,100 tokens | > 16,000 tokens | ⚠️ **> 10,000 Token Alert Maintained** |
-| 4 of 5 | 2026-09-04 10:56:15 | ~1,200 tokens | > 17,000 tokens | ⚠️ **> 10,000 Token Alert Maintained** |
-| 5 of 5 | 2026-09-04 10:56:36 | ~1,000 tokens | > 18,000 tokens | ⚠️ **> 10,000 Token Alert Maintained** |
-
-*5-turn token logging completed. Rule fulfillment satisfied.*
-
-
-
-
+| Turn | Date / Time | Prompt Tokens (Est.) | Completion Tokens (Est.) | Total Tokens (Est.) | Cumulative Tokens | 10k Alert Threshold Status |
+|------|-------------|----------------------|--------------------------|---------------------|-------------------|----------------------------|
+| 1    | 2026-09-10 05:07:12 | ~7,200 | ~1,200 | ~8,400 | ~8,400 | Normal (< 10,000 limit) |
+| 2    | 2026-09-10 05:09:52 | ~9,800 | ~2,600 | ~12,400 | ~12,400 | ⚠️ **10,000 TOKEN THRESHOLD REACHED** (~12.4k total) |
+| 3    | 2026-09-10 05:14:10 | ~11,000 | ~1,000 | ~12,000 | ~12,000 | ⚠️ **10,000 TOKEN LIMIT ACTIVE** (Conversation context > 10,000 tokens) |
+| 4    | 2026-09-10 05:27:15 | ~13,000 | ~800 | ~13,800 | ~13,800 | ⚠️ **10,000 TOKEN LIMIT ACTIVE** (Conversation context > 10,000 tokens) |

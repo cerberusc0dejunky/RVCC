@@ -11,8 +11,7 @@
     <script>
       // Capture and cancel third-party script errors or sandboxed iframe environment security exceptions
       window.addEventListener('error', function(e) {
-        var isFb = e.filename && (e.filename.indexOf('facebook') !== -1 || e.filename.indexOf('fb') !== -1);
-        if (e.message === 'Script error.' || !e.filename || isFb) {
+        if (e.message === 'Script error.' || !e.filename) {
           console.warn('Handled cross-origin iframe security error:', e.message, 'at', e.filename);
           e.preventDefault();
           e.stopPropagation();
@@ -22,7 +21,7 @@
 
       window.addEventListener('unhandledrejection', function(e) {
         var reasonStr = e.reason ? String(e.reason) : '';
-        if (reasonStr.indexOf('facebook') !== -1 || reasonStr.indexOf('Script error') !== -1 || reasonStr.indexOf('FB') !== -1) {
+        if (reasonStr.indexOf('Script error') !== -1) {
           console.warn('Handled cross-origin promise rejection:', reasonStr);
           e.preventDefault();
           e.stopPropagation();
@@ -32,11 +31,8 @@
     </script>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased">
-    <!-- Meta Facebook SDK setup -->
-    <div id="fb-root"></div>
-    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
-    
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+
