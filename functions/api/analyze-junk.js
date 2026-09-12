@@ -63,7 +63,7 @@ Carefully examine this photo of debris, scrap, trash, or discarded items and pro
 
 Return ONLY a valid JSON object matching the requested schema with all required fields.`;
 
-    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
 
     const geminiPayload = {
       contents: [
@@ -88,7 +88,10 @@ Return ONLY a valid JSON object matching the requested schema with all required 
 
     const res = await fetch(geminiEndpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-goog-api-key": apiKey
+      },
       body: JSON.stringify(geminiPayload)
     });
 
