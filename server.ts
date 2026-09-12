@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { simulateTruckPack } from "./src/lib/packingEngine";
 
 dotenv.config();
 
@@ -177,8 +178,26 @@ Return ONLY a valid JSON object matching the requested schema.`;
 
       const result = JSON.parse(text.trim());
 
-      // Hour estimation logic from Gemini
-      const estimatedHours = Math.max(1, Math.round(Number(result.estimatedLaborHours || 1)));
+      // 1. Physical 3D Bin-Packing: Estimate load size and calculate labor hours
+      const itemsToPack = (result.itemTags && result.itemTags.length > 0)
+        ? result.itemTags
+        : Object.entries(result.detectedItems || {}).flatMap(([name, qty]) => Array(Math.max(0, Number(qty) || 0)).fill(name));
+
+      const sim = simulateTruckPack(itemsToPack);
+
+      result.loadType = sim.loadType;
+      result.recommendedVehicle = sim.recommendedVehicle;
+      result.truckLoadFraction = sim.truckLoadFraction;
+      result.volumeCubicYards = sim.volumeCubicYards;
+      result.weightEstimate = sim.weightEstimate;
+      result.estimatedLaborHours = sim.estimatedLaborHours;
+      result.crewRecommendation = sim.crewRecommendation;
+      result.physicsNotes = sim.physicsNotes;
+      result.confidenceScore = sim.confidenceScore;
+      result.briefAnalysis = sim.briefAnalysis;
+
+      // 2. Silently add the labor to the invoice in the background via Shopify Storefront API
+      const estimatedHours = sim.estimatedLaborHours;
 
       // Shopify Storefront API cart creation
       const shopifyEndpoint = "https://c0dejunky.com/api/2024-01/graphql.json";

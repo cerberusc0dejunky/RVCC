@@ -1,5 +1,6 @@
 // Cloudflare Worker: Gemini Debris Analysis & Shopify Storefront Cart Creator
 // Reworked to replace Stripe Checkout with Shopify Storefront API cartCreate mutation
+import { simulateTruckPack } from "./functions/api/packingEngine.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -174,10 +175,28 @@ Return ONLY a valid JSON object matching the requested schema with all required 
         );
       }
 
-      // Hour estimation logic: take hours estimated by Gemini, or from explicit param, minimum 1
+      // 1. Physical 3D Bin-Packing: Estimate load size and calculate labor hours
+      const itemsToPack = (parsedAnalysis.itemTags && parsedAnalysis.itemTags.length > 0)
+        ? parsedAnalysis.itemTags
+        : Object.entries(parsedAnalysis.detectedItems || {}).flatMap(([name, qty]) => Array(Math.max(0, Number(qty) || 0)).fill(name));
+
+      const sim = simulateTruckPack(itemsToPack);
+
+      parsedAnalysis.loadType = sim.loadType;
+      parsedAnalysis.recommendedVehicle = sim.recommendedVehicle;
+      parsedAnalysis.truckLoadFraction = sim.truckLoadFraction;
+      parsedAnalysis.volumeCubicYards = sim.volumeCubicYards;
+      parsedAnalysis.weightEstimate = sim.weightEstimate;
+      parsedAnalysis.estimatedLaborHours = sim.estimatedLaborHours;
+      parsedAnalysis.crewRecommendation = sim.crewRecommendation;
+      parsedAnalysis.physicsNotes = sim.physicsNotes;
+      parsedAnalysis.confidenceScore = sim.confidenceScore;
+      parsedAnalysis.briefAnalysis = sim.briefAnalysis;
+
+      // 2. Silently add the labor to the invoice in the background via Shopify Storefront API
       const estimatedHours = Math.max(
         1,
-        Math.round(Number(hoursParam || parsedAnalysis.estimatedLaborHours || 1))
+        Math.round(Number(hoursParam || sim.estimatedLaborHours || 1))
       );
 
       // 4. Shopify Storefront API Cart Creation

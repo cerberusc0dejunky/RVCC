@@ -1,5 +1,6 @@
 // functions/api/analyze-junk.js
 // Cloudflare Pages Function: Analyze debris photo using Google Gemini API at the edge
+import { simulateTruckPack } from "./packingEngine.js";
 
 export async function onRequestPost(context) {
   try {
@@ -109,10 +110,27 @@ Return ONLY a valid JSON object matching the requested schema with all required 
 
     const parsed = JSON.parse(rawText);
 
-    // 1. Hour estimation from Gemini
-    const estimatedHours = Math.max(1, Math.round(Number(parsed.estimatedLaborHours || 1)));
+    // 1. Physical 3D Bin-Packing Model: Estimate load size and calculate job labor time
+    const itemsToPack = (parsed.itemTags && parsed.itemTags.length > 0)
+      ? parsed.itemTags
+      : Object.entries(parsed.detectedItems || {}).flatMap(([name, qty]) => Array(Math.max(0, Number(qty) || 0)).fill(name));
 
-    // 2. Shopify Storefront API: Create cart with estimated hours
+    const sim = simulateTruckPack(itemsToPack);
+
+    // Overwrite raw LLM guesses with deterministic 3D packing physics
+    parsed.loadType = sim.loadType;
+    parsed.recommendedVehicle = sim.recommendedVehicle;
+    parsed.truckLoadFraction = sim.truckLoadFraction;
+    parsed.volumeCubicYards = sim.volumeCubicYards;
+    parsed.weightEstimate = sim.weightEstimate;
+    parsed.estimatedLaborHours = sim.estimatedLaborHours;
+    parsed.crewRecommendation = sim.crewRecommendation;
+    parsed.physicsNotes = sim.physicsNotes;
+    parsed.confidenceScore = sim.confidenceScore;
+    parsed.briefAnalysis = sim.briefAnalysis;
+
+    // 2. Silently add the labor to the invoice in the background via Shopify Storefront API
+    const estimatedHours = sim.estimatedLaborHours;
     const shopifyEndpoint = "https://c0dejunky.com/api/2024-01/graphql.json";
     const storefrontAccessToken = env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || env.X_SHOPIFY_STOREFRONT_ACCESS_TOKEN || "";
 
