@@ -478,8 +478,8 @@ export function simulateTruckPack(
   // - Overflow count > 2 items
   // - Total weight > 1,800 lbs
   // - Volume > 8.0 cubic yards
-  // - 4+ heavy floor base appliances (cannot safely stack 200lb appliances)
-  const exceedsTruck = overflow.length > 2 || totalWeightLbs > standardBed.maxPayloadLbs || volumeCubicYards > 8.0 || heavyBaseItemsCount >= 4;
+  // (Removed arbitrary scrap appliance limit — driver will pile that truck up and decide on-site if it is too much)
+  const exceedsTruck = overflow.length > 2 || totalWeightLbs > standardBed.maxPayloadLbs || volumeCubicYards > 8.0;
 
   if (exceedsTruck) {
     recommendedVehicle = 'trailer';
@@ -531,6 +531,7 @@ export function simulateTruckPack(
   }
 
   const topNames = Object.entries(itemCounts).map(([name, qty]) => `${qty}x ${name}`).slice(0, 4).join(', ');
+  const suggestedDescription = Object.entries(itemCounts).map(([name, qty]) => `${qty}x ${name}`).join(', ');
   const briefAnalysis = `3D Bin-Packing simulated ${expandedItems.length} items. Estimated load size: ${truckLoadFraction} (${volumeCubicYards} cu yds, ~${totalWeightLbs} lbs). Labor time: ${estimatedLaborHours} hr${estimatedLaborHours > 1 ? 's' : ''} ($${estimatedLaborHours * 25} total labor).`;
 
   const prohibitedItems = checkProhibitedItems(inputItems);

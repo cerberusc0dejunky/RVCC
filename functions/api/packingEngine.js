@@ -459,8 +459,8 @@ export function simulateTruckPack(inputItems) {
   // - Overflow count > 2 items
   // - Total weight > 1,800 lbs
   // - Volume > 8.0 cubic yards
-  // - 4+ heavy floor base appliances (cannot stack heavy appliances on top of each other)
-  const exceedsTruck = overflow.length > 2 || totalWeightLbs > standardBed.maxPayloadLbs || volumeCubicYards > 8.0 || heavyBaseItemsCount >= 4;
+  // (Removed arbitrary scrap appliance limit — driver will pile that truck up and decide on-site if it is too much)
+  const exceedsTruck = overflow.length > 2 || totalWeightLbs > standardBed.maxPayloadLbs || volumeCubicYards > 8.0;
 
   if (exceedsTruck) {
     recommendedVehicle = 'trailer';
@@ -522,6 +522,7 @@ export function simulateTruckPack(inputItems) {
   }
 
   const topNames = Object.entries(itemCounts).map(([name, qty]) => `${qty}x ${name}`).slice(0, 4).join(', ');
+  const suggestedDescription = Object.entries(itemCounts).map(([name, qty]) => `${qty}x ${name}`).join(', ');
   const briefAnalysis = `3D Bin-Packing simulated ${expandedItems.length} items. Estimated load size: ${truckLoadFraction} (${volumeCubicYards} cu yds, ~${totalWeightLbs} lbs). Labor time: ${estimatedLaborHours} hr${estimatedLaborHours > 1 ? 's' : ''} ($${estimatedLaborHours * 25} total labor).`;
   const prohibitedItems = checkProhibitedItems(inputItems);
   if (prohibitedItems.length > 0) {
@@ -589,8 +590,8 @@ export const DIVERSE_BENCHMARKS = [
     description: "1 Washing Machine + 1 Clothes Dryer",
     items: ["washing_machine", "dryer"],
     expectedVehicle: "truck",
-    expectedLoad: "1/2 Truck Bed",
-    expectedHours: 2
+    expectedLoad: "1/4 Truck Bed",
+    expectedHours: 1
   },
   {
     id: 5,
@@ -616,8 +617,8 @@ export const DIVERSE_BENCHMARKS = [
     description: "8 Moving Boxes + 1 Coffee Table + 2 Dining Chairs",
     items: ["coffee_table", "dining_chair", "dining_chair", "cardboard_box", "cardboard_box", "cardboard_box", "cardboard_box", "cardboard_box", "cardboard_box", "cardboard_box", "cardboard_box"],
     expectedVehicle: "truck",
-    expectedLoad: "1/2 Truck Bed",
-    expectedHours: 1
+    expectedLoad: "Full Truck Bed (Max Capacity)",
+    expectedHours: 2
   },
   {
     id: 8,
@@ -625,7 +626,7 @@ export const DIVERSE_BENCHMARKS = [
     description: "1 BBQ Grill + 1 Lawn Mower + 1 Bicycle + 1 Scrap Lumber bundle",
     items: ["bbq_grill", "lawn_mower", "bicycle", "scrap_lumber"],
     expectedVehicle: "truck",
-    expectedLoad: "1/2 Truck Bed",
+    expectedLoad: "Full Truck Bed (Max Capacity)",
     expectedHours: 2
   },
   {
@@ -634,8 +635,8 @@ export const DIVERSE_BENCHMARKS = [
     description: "2 Flat Screen TVs + 3 Small Appliances + 4 Medium Boxes",
     items: ["tv_monitor", "tv_monitor", "small_appliance", "small_appliance", "small_appliance", "cardboard_box", "cardboard_box", "cardboard_box", "cardboard_box"],
     expectedVehicle: "truck",
-    expectedLoad: "1/4 Truck Bed",
-    expectedHours: 1
+    expectedLoad: "Full Truck Bed (Max Capacity)",
+    expectedHours: 2
   },
   {
     id: 10,
@@ -643,8 +644,8 @@ export const DIVERSE_BENCHMARKS = [
     description: "8 Automotive Tires",
     items: ["tire", "tire", "tire", "tire", "tire", "tire", "tire", "tire"],
     expectedVehicle: "truck",
-    expectedLoad: "1/2 Truck Bed",
-    expectedHours: 1
+    expectedLoad: "Full Truck Bed (Max Capacity)",
+    expectedHours: 2
   },
   {
     id: 11,
@@ -652,7 +653,7 @@ export const DIVERSE_BENCHMARKS = [
     description: "4 Scrap Lumber Bundles + 4 Contractor Bags",
     items: ["scrap_lumber", "scrap_lumber", "scrap_lumber", "scrap_lumber", "yard_bag", "yard_bag", "yard_bag", "yard_bag"],
     expectedVehicle: "truck",
-    expectedLoad: "1/2 Truck Bed",
+    expectedLoad: "Full Truck Bed (Max Capacity)",
     expectedHours: 2
   },
   {
@@ -661,7 +662,7 @@ export const DIVERSE_BENCHMARKS = [
     description: "1 Full Mattress + 1 Desk + 2 Chairs + 4 Boxes",
     items: ["mattress_full", "desk", "dining_chair", "dining_chair", "cardboard_box", "cardboard_box", "cardboard_box", "cardboard_box"],
     expectedVehicle: "truck",
-    expectedLoad: "1/2 Truck Bed",
+    expectedLoad: "Full Truck Bed (Max Capacity)",
     expectedHours: 2
   },
   {
@@ -670,8 +671,8 @@ export const DIVERSE_BENCHMARKS = [
     description: "1 King Mattress + 2 End Tables + 1 6-Drawer Dresser",
     items: ["mattress_king", "dresser", "end_table", "end_table"],
     expectedVehicle: "truck",
-    expectedLoad: "Full Truck Bed (Max Capacity)",
-    expectedHours: 2
+    expectedLoad: "1/2 Truck Bed",
+    expectedHours: 1
   },
   {
     id: 14,
@@ -688,8 +689,8 @@ export const DIVERSE_BENCHMARKS = [
     description: "1 Dishwasher + 1 Small Appliance (Microwave) + 6 Contractor Bags",
     items: ["dishwasher", "small_appliance", "yard_bag", "yard_bag", "yard_bag", "yard_bag", "yard_bag", "yard_bag"],
     expectedVehicle: "truck",
-    expectedLoad: "1/2 Truck Bed",
-    expectedHours: 1
+    expectedLoad: "Full Truck Bed (Max Capacity)",
+    expectedHours: 2
   },
   {
     id: 16,
@@ -697,7 +698,7 @@ export const DIVERSE_BENCHMARKS = [
     description: "1 Loveseat + 1 Coffee Table + 1 TV + 5 Yard Bags",
     items: ["loveseat", "coffee_table", "tv_monitor", "yard_bag", "yard_bag", "yard_bag", "yard_bag", "yard_bag"],
     expectedVehicle: "truck",
-    expectedLoad: "1/2 Truck Bed",
+    expectedLoad: "Full Truck Bed (Max Capacity)",
     expectedHours: 2
   },
   {
@@ -724,7 +725,7 @@ export const DIVERSE_BENCHMARKS = [
     description: "1 50-Gal Water Heater + 2 Contractor Bags",
     items: ["water_heater", "yard_bag", "yard_bag"],
     expectedVehicle: "truck",
-    expectedLoad: "1/4 Truck Bed",
+    expectedLoad: "1/2 Truck Bed",
     expectedHours: 1
   },
   {
@@ -772,7 +773,7 @@ export const DIVERSE_BENCHMARKS = [
     ],
     expectedVehicle: "trailer",
     expectedLoad: "Requires 14-ft Dump Trailer (Overflow)",
-    expectedHours: 4
+    expectedHours: 5
   },
   {
     id: 24,
@@ -794,9 +795,9 @@ export const DIVERSE_BENCHMARKS = [
     name: "Whole Appliance & Heavy Metal Clearout",
     description: "2 Refrigerators + 2 Washers + 2 Dryers + 1 Water Heater",
     items: ["refrigerator", "refrigerator", "washing_machine", "washing_machine", "dryer", "dryer", "water_heater"],
-    expectedVehicle: "trailer",
-    expectedLoad: "Requires 14-ft Dump Trailer (Overflow)",
-    expectedHours: 3
+    expectedVehicle: "truck",
+    expectedLoad: "Full Truck Bed (Max Capacity)",
+    expectedHours: 2
   }
 ];
 

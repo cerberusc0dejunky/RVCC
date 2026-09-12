@@ -173,7 +173,6 @@ export default function App() {
     freezer: false
   });
   const [appliancePickupLocation, setAppliancePickupLocation] = useState<string>('Curbside');
-  const [freeTierLimitReached, setFreeTierLimitReached] = useState<boolean>(false);
 
   // Description Box under photo upload
   const [junkDescription, setJunkDescription] = useState<string>('');
@@ -959,17 +958,17 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                               </p>
                             </div>
 
-                            {/* Icons Grid with Checkboxes */}
+                            {/* Appliance Images Grid with Checkboxes */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                               {[
-                                { id: 'refrigerator', label: 'Refrigerator', icon: '❄️' },
-                                { id: 'washer', label: 'Washing Machine', icon: '🧺' },
-                                { id: 'dryer', label: 'Clothes Dryer', icon: '💨' },
-                                { id: 'stove', label: 'Stove / Oven', icon: '🔥' },
+                                { id: 'refrigerator', label: 'Refrigerator', img: '/assets/img/refridgerator.png', icon: '❄️' },
+                                { id: 'washer', label: 'Washing Machine', img: '/assets/img/washer.png', icon: '🧺' },
+                                { id: 'dryer', label: 'Clothes Dryer', img: '/assets/img/dryer.png', icon: '💨' },
+                                { id: 'stove', label: 'Stove / Oven', img: '/assets/img/Stove.png', icon: '🔥' },
                                 { id: 'dishwasher', label: 'Dishwasher', icon: '🍽️' },
-                                { id: 'microwave', label: 'Microwave', icon: '⚡' },
-                                { id: 'water_heater', label: 'Water Heater', icon: '🚰' },
-                                { id: 'freezer', label: 'Deep Freezer', icon: '🧊' }
+                                { id: 'microwave', label: 'Microwave', img: '/assets/img/microwave.png', icon: '⚡' },
+                                { id: 'water_heater', label: 'Water Heater', img: '/assets/img/hotwaterheater.png', icon: '🚰' },
+                                { id: 'freezer', label: 'Deep Freezer', img: '/assets/img/Deepfreeze.png', icon: '🧊' }
                               ].map(app => {
                                 const isChecked = selectedAppliances[app.id] || false;
                                 return (
@@ -979,12 +978,35 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                     onClick={() => {
                                       setSelectedAppliances(prev => ({ ...prev, [app.id]: !isChecked }));
                                     }}
-                                    className={`p-3 rounded-lg border-2 text-center transition-all flex flex-col items-center justify-center relative cursor-pointer ${isChecked ? 'border-emerald-500 bg-emerald-50/20' : 'border-slate-200 hover:bg-white bg-slate-100/50'}`}
+                                    className={`p-2.5 rounded-xl border-2 text-center transition-all flex flex-col items-center justify-between relative cursor-pointer group min-h-[105px] ${
+                                      isChecked
+                                        ? 'border-emerald-500 bg-emerald-50/40 shadow-sm ring-2 ring-emerald-500/20'
+                                        : 'border-slate-200 hover:border-slate-300 hover:bg-white bg-white/80 shadow-2xs'
+                                    }`}
                                   >
-                                    <span className="text-2xl mb-1.5 select-none">{app.icon}</span>
-                                    <span className="block text-[10px] font-black text-slate-800 tracking-tight leading-tight">{app.label}</span>
+                                    <div className="w-14 h-14 rounded-lg bg-slate-50/80 flex items-center justify-center p-1 overflow-hidden transition-transform group-hover:scale-105">
+                                      {app.img ? (
+                                        <img
+                                          src={app.img}
+                                          alt={app.label}
+                                          className="w-full h-full object-contain drop-shadow-xs"
+                                          loading="lazy"
+                                        />
+                                      ) : (
+                                        <span className="text-3xl select-none">{app.icon}</span>
+                                      )}
+                                    </div>
+                                    <span className="block text-[10px] font-black text-slate-800 tracking-tight leading-tight mt-1">
+                                      {app.label}
+                                    </span>
                                     <div className="absolute top-1.5 right-1.5">
-                                      <div className={`w-3.5 h-3.5 border rounded flex items-center justify-center transition-colors ${isChecked ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-350 bg-white'}`}>
+                                      <div
+                                        className={`w-4 h-4 border rounded flex items-center justify-center transition-colors ${
+                                          isChecked
+                                            ? 'border-emerald-500 bg-emerald-500 text-white shadow-xs'
+                                            : 'border-slate-300 bg-white group-hover:border-slate-400'
+                                        }`}
+                                      >
                                         {isChecked && <Check className="w-2.5 h-2.5 stroke-[4]" />}
                                       </div>
                                     </div>
@@ -1016,7 +1038,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                 <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] font-medium rounded leading-snug flex items-center gap-2">
                                   <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                                   <span>
-                                    <strong>{Object.values(selectedAppliances).filter(Boolean).length} appliance(s)</strong> selected for scrap metal pickup. Our driver will evaluate the truck pile upon arrival.
+                                    <strong>{Object.values(selectedAppliances).filter(Boolean).length} appliance(s)</strong> selected for scrap pickup. Pile it up! Our driver packs the truck tight and will evaluate the load upon arrival.
                                   </span>
                                 </div>
                               </div>
