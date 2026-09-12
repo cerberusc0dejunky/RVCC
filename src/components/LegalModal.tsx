@@ -1,8 +1,8 @@
 import React from 'react';
-import { X, ShieldCheck, FileText, Trash2, ExternalLink } from 'lucide-react';
+import { X, ShieldCheck, FileText, Trash2, ExternalLink, AlertTriangle, Ban } from 'lucide-react';
 const logoImg = '/assets/img/logoRVCC.png';
 
-export type LegalDocType = 'terms' | 'privacy' | 'deletion';
+export type LegalDocType = 'terms' | 'privacy' | 'deletion' | 'prohibited';
 
 interface LegalModalProps {
   isOpen: boolean;
@@ -95,6 +95,18 @@ export const LegalModal: React.FC<LegalModalProps> = ({
             <Trash2 className="w-3.5 h-3.5" />
             <span>Data Deletion</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('prohibited')}
+            className={`pb-2 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'prohibited'
+                ? 'border-red-500 text-red-600'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <Ban className="w-3.5 h-3.5 text-red-500" />
+            <span>Non-Haulable Items</span>
+          </button>
         </div>
 
         {/* Scrollable Content Body */}
@@ -175,6 +187,65 @@ export const LegalModal: React.FC<LegalModalProps> = ({
                   <span>Open Full Data Deletion Page in New Tab</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'prohibited' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b pb-2 border-slate-200">
+                <h3 className="text-base font-black uppercase text-red-600 flex items-center gap-2">
+                  <Ban className="w-5 h-5 text-red-600" />
+                  Landfill Prohibited Items (Non-Haulable)
+                </h3>
+                <span className="text-[10px] bg-red-100 text-red-800 font-bold px-2 py-0.5 rounded font-mono uppercase">
+                  Sebastian County Landfill
+                </span>
+              </div>
+              <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded text-xs text-red-900 leading-snug">
+                <p className="font-bold">Notice to all River Valley Cleanup Crew Customers:</p>
+                <p className="mt-1">
+                  The following items are <strong>not accepted by the dump</strong>, so our crew <strong>cannot and will not haul them</strong>. Please ensure these items are segregated from your debris pile prior to crew dispatch.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 pt-1">
+                {[
+                  { title: "Non-solidified Paint", desc: "Only paint from Sebastian County residents can be received. Must be taken directly to the Convenience Center to solidify or reuse." },
+                  { title: "Burn Barrels", desc: "Debris must be removed from the barrel and placed in garbage bags; un-bagged barrels will not be accepted." },
+                  { title: "Gas Cans or Tanks with Liquid", desc: "Any fuel containers, cans, or tanks containing liquid gasoline or diesel are strictly prohibited." },
+                  { title: "Whole Tires", desc: "Tires cannot be accepted unless they have been cut and quartered." },
+                  { title: "Used Motor Oils & Oil Filters", desc: "Prohibited unless dome-punched and hot drained." },
+                  { title: "Dry Cell Heavy Metal Batteries", desc: "Any batteries containing cadmium or mercury." },
+                  { title: "Wet Cell or Lead-Acid Batteries", desc: "Automotive, boat, or equipment lead-acid batteries." },
+                  { title: "Domestic Septic Tank Pumpings", desc: "Septic sewage or liquid pumping waste." },
+                  { title: "Incinerator Ash & Residues", desc: "Combustion or incinerator ash residue." },
+                  { title: "Free Liquids (EPA Method 9095)", desc: "Free liquid containers failing the US EPA Paint Filter Test." },
+                  { title: "Regulated Bio-Medical & Vet Waste", desc: "Red-bagged biohazards, medical, or unsterilized veterinary waste." },
+                  { title: "Compressed Gas Cylinders & Drums", desc: "Cylinders/drums not meeting RCRA empty definition under 40 CFR 261 (e.g. pressurized propane tanks)." },
+                  { title: "Electrical Transformers & Dielectric Fluids", desc: "Transformers, capacitors, or equipment containing dielectric fluids." },
+                  { title: "Petroleum Contaminated Soils", desc: "Soils failing specific TPH, BETX, TCLP analysis." },
+                  { title: "Cresol Treated Wood", desc: "Treated wood that has not been certified hazard free." },
+                  { title: "Appliances & Parts Containing Freon", desc: "Refrigerators, AC units, or freezers that have not been certified evacuated by a licensed technician." },
+                  { title: "Pesticide, Herbicide & Fungicide Containers", desc: "Containers that have not been triple-rinsed and punctured." },
+                  { title: "Hazardous & PCB Wastes", desc: "As defined in 40 CFR 261 and 761." },
+                  { title: "Firearms, Ammunition & Explosives", desc: "Guns, live ammunition, gunpowder, fireworks, or explosive materials." },
+                  { title: "Commercial Fluorescent Light Bulbs", desc: "Fluorescent tubes from commercial businesses." }
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-slate-50 border border-slate-200 p-2.5 rounded-lg flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">
+                      ✕
+                    </span>
+                    <div>
+                      <span className="block font-bold text-xs text-slate-900 uppercase font-mono">
+                        {item.title}
+                      </span>
+                      <span className="block text-[11px] text-slate-600 mt-0.5">
+                        {item.desc}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

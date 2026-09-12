@@ -62,6 +62,25 @@ Carefully examine this photo of debris, scrap, trash, or discarded items and pro
 
 14. Provide a clear, clean customer description in "suggestedDescription" ready for a work order ticket.
 
+15. STRICT SEBASTIAN COUNTY LANDFILL NON-HAULABLE SCREENING:
+Check image for prohibited items that the local landfill rejects:
+- Non-solidified/wet paint cans
+- Burn barrels with loose unbagged debris
+- Gas cans or fuel tanks with liquid
+- Tires (unless visibly cut and quartered)
+- Motor oil, oil filters, or free automotive fluids
+- Car batteries, lead-acid or heavy metal batteries
+- Septic pumpings or incinerator ash
+- Free liquids (EPA Method 9095)
+- Medical / veterinary biohazard waste
+- Compressed gas cylinders or closed chemical drums
+- Transformers or dielectric fluids
+- Pesticide, herbicide, or fungicide containers
+- PCB or hazardous chemical containers
+- Firearms, ammunition, gunpowder, fireworks, explosives
+- Commercial fluorescent tubes
+If any are detected, list their exact names in 'prohibitedItemsDetected: string[]', add explicit warnings to 'safetyFlags' noting River Valley Cleanup Crew cannot haul them, and mention in 'briefAnalysis'.
+
 Return ONLY a valid JSON object matching the requested schema with all required fields.`;
 
     const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
@@ -126,6 +145,11 @@ Return ONLY a valid JSON object matching the requested schema with all required 
     parsed.estimatedLaborHours = sim.estimatedLaborHours;
     parsed.crewRecommendation = sim.crewRecommendation;
     parsed.physicsNotes = sim.physicsNotes;
+    parsed.safetyFlags = sim.safetyFlags;
+    parsed.prohibitedItemsDetected = [
+      ...new Set([...(sim.prohibitedItemsDetected || []), ...(parsed.prohibitedItemsDetected || [])])
+    ];
+    parsed.hasProhibitedItems = parsed.prohibitedItemsDetected.length > 0;
     parsed.confidenceScore = sim.confidenceScore;
     parsed.briefAnalysis = sim.briefAnalysis;
 

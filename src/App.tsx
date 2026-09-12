@@ -8,7 +8,7 @@ import {
   Printer, Send, Copy, FileText, AlertCircle, Trash2, 
   Plus, Minus, Upload, Camera, Facebook, Check, ChevronRight, 
   ChevronLeft, Info, Lock, CreditCard, Sparkles, Clock, ShieldCheck, ArrowRight,
-  LayoutDashboard, SearchCheck, LogIn, LogOut
+  LayoutDashboard, SearchCheck, LogIn, LogOut, Ban
 } from 'lucide-react';
 import { 
   saveBookingToDatabase, 
@@ -207,6 +207,8 @@ export default function App() {
     estimatedLaborHours: number;
     crewRecommendation?: string;
     safetyFlags?: string[];
+    prohibitedItemsDetected?: string[];
+    hasProhibitedItems?: boolean;
     recyclableDetected?: boolean;
     confidenceScore: number;
     checkoutUrl?: string;
@@ -316,13 +318,13 @@ export default function App() {
     // 1. Gas cost based on dynamic Arkansas 3-leg ZIP routing
     const gasCost = (routeMetrics.total / truckMpg) * gasPrice;
 
-    // 2. Dump Fees
+    // 2. Dump Fees (Official Fort Smith Sanitary Landfill Resident Rates)
     let dumpFees = 0;
     let itemDetailsCost = 0;
     if (haulType === 'truck') {
-      dumpFees = 25; // automatically adds $25 flat dump fee
+      dumpFees = 12.47; // Official Fort Smith Resident Flat Landfill Rate ($12.47/load)
     } else if (haulType === 'trailer') {
-      // defined by dump pricing sheet and added according to what is being hauled (no flat surcharge)
+      // Commercial/trailer rate from dump sheet ($29.67 minimum flat charge)
       Object.keys(itemQuantities).forEach(itemId => {
         const qty = itemQuantities[itemId] || 0;
         const match = DUMP_SHEET_ITEMS.find(item => item.id === itemId);
@@ -330,7 +332,7 @@ export default function App() {
           itemDetailsCost += match.price * qty;
         }
       });
-      dumpFees = itemDetailsCost > 0 ? itemDetailsCost : 45;
+      dumpFees = itemDetailsCost > 0 ? itemDetailsCost : 29.67;
     }
 
     // 3. Labor hours cost ($25/hr)
@@ -832,10 +834,10 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                             <div>
                               <div className="flex items-center justify-between">
                                 <span className="block font-black text-slate-900 uppercase text-xs sm:text-sm font-display tracking-tight">Heavy-Duty Truck Load</span>
-                                <span className="text-[11px] font-black text-[#ff6600] font-mono bg-orange-100 px-1.5 py-0.5 rounded">$25 Gate Fee</span>
+                                <span className="text-[11px] font-black text-[#ff6600] font-mono bg-orange-100 px-1.5 py-0.5 rounded">$12.47 Dump Fee</span>
                               </div>
                               <span className="block text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">
-                                Flat landfill gate fee of <strong className="text-slate-900 font-bold">$25.00</strong>. Ideal for fast single-truck cleanouts.
+                                Fort Smith resident flat landfill fee of <strong className="text-slate-900 font-bold">$12.47</strong> silently added to invoice. Ideal for fast single-truck cleanouts.
                               </span>
                             </div>
                           </button>
@@ -877,6 +879,37 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                               <span className="block text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">
                                 14-foot tandem dump trailer. Disposal calculated by item volume. Zero gate flat surcharges.
                               </span>
+                            </div>
+                          </button>
+                        </div>
+
+                        {/* AI Assistance Button for Unsure Customers */}
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!haulType) setHaulType('truck');
+                              setValidationErrors(prev => ({ ...prev, haulType: '' }));
+                              setCurrentSlide(3);
+                            }}
+                            className="w-full group p-3.5 rounded-xl border-2 border-dashed border-[#ff6600]/50 hover:border-[#ff6600] bg-gradient-to-r from-orange-50/60 via-amber-50/40 to-orange-50/60 hover:from-orange-100/70 hover:to-amber-100/60 text-slate-800 transition-all shadow-xs hover:shadow-md flex items-center justify-between cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3 text-left">
+                              <div className="w-10 h-10 rounded-lg bg-[#ff6600] text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                                <Sparkles className="w-5 h-5 text-white animate-pulse" />
+                              </div>
+                              <div>
+                                <span className="block font-black text-sm text-slate-900 group-hover:text-[#ff6600] transition-colors">
+                                  Not sure? Let our Ai Analyze your image
+                                </span>
+                                <span className="block text-[11px] text-slate-600 font-medium">
+                                  Upload a quick photo of your pile — our 3D AI automatically calculates vehicle size & labor hours
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 text-xs font-bold text-[#ff6600] group-hover:translate-x-1 transition-transform font-mono pl-2">
+                              <span>Scan Now</span>
+                              <ChevronRight className="w-4 h-4" />
                             </div>
                           </button>
                         </div>
@@ -944,12 +977,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                     type="button"
                                     key={app.id}
                                     onClick={() => {
-                                      setSelectedAppliances(prev => {
-                                        const updated = { ...prev, [app.id]: !isChecked };
-                                        const count = Object.values(updated).filter(Boolean).length;
-                                        setFreeTierLimitReached(count > 2);
-                                        return updated;
-                                      });
+                                      setSelectedAppliances(prev => ({ ...prev, [app.id]: !isChecked }));
                                     }}
                                     className={`p-3 rounded-lg border-2 text-center transition-all flex flex-col items-center justify-center relative cursor-pointer ${isChecked ? 'border-emerald-500 bg-emerald-50/20' : 'border-slate-200 hover:bg-white bg-slate-100/50'}`}
                                   >
@@ -965,7 +993,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                               })}
                             </div>
 
-                            {/* Free limit indicator & pickup location selection */}
+                            {/* Appliance pickup location selection & status */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200">
                               <div className="space-y-1.5">
                                 <label className="block text-[9px] font-mono font-black uppercase text-slate-500">
@@ -985,15 +1013,12 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                               </div>
 
                               <div className="flex flex-col justify-center">
-                                {freeTierLimitReached ? (
-                                  <div className="p-2 bg-red-50 border border-red-200 text-red-800 text-[10px] font-bold rounded leading-snug">
-                                    ⚠️ Free Tier limit exceeded (Max 2)! Please deselect some appliances or change your haul type to Truck/Trailer.
-                                  </div>
-                                ) : (
-                                  <div className="p-2 bg-emerald-50 border border-emerald-150 text-emerald-800 text-[10px] font-semibold rounded leading-snug font-mono">
-                                    ✓ FREE tier qualification: {Object.values(selectedAppliances).filter(Boolean).length}/2 appliances selected.
-                                  </div>
-                                )}
+                                <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] font-medium rounded leading-snug flex items-center gap-2">
+                                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  <span>
+                                    <strong>{Object.values(selectedAppliances).filter(Boolean).length} appliance(s)</strong> selected for scrap metal pickup. Our driver will evaluate the truck pile upon arrival.
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </motion.div>
@@ -1199,6 +1224,41 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                     )}
                                   </div>
                                 )}
+
+                                 {/* Landfill Non-Haulable Prohibited Items Warning Banner */}
+                                 {(aiAnalysisResult.hasProhibitedItems || (aiAnalysisResult.prohibitedItemsDetected && aiAnalysisResult.prohibitedItemsDetected.length > 0)) && (
+                                   <div className="bg-red-50 border-2 border-red-300 rounded-lg p-2.5 text-xs text-red-900 space-y-1.5 shadow-xs animate-in fade-in">
+                                     <div className="flex items-center justify-between">
+                                       <span className="flex items-center gap-1.5 font-black text-red-700 font-mono text-[10px] uppercase">
+                                         <Ban className="w-3.5 h-3.5 text-red-600 shrink-0 stroke-[2.5]" />
+                                         <span>Non-Haulable Items Detected</span>
+                                       </span>
+                                       <span className="text-[9px] bg-red-200 text-red-900 font-bold px-1.5 py-0.5 rounded font-mono uppercase">
+                                         Dump Prohibited
+                                       </span>
+                                     </div>
+                                     <p className="text-[11px] text-red-800 leading-snug">
+                                       The following item(s) are <strong>not accepted by the landfill</strong> and cannot be hauled by our crew:
+                                     </p>
+                                     <div className="flex flex-wrap gap-1">
+                                       {(aiAnalysisResult.prohibitedItemsDetected || []).map((item, idx) => (
+                                         <span key={idx} className="bg-red-150 text-red-900 font-mono font-bold text-[9px] px-2 py-0.5 rounded border border-red-300 flex items-center gap-1">
+                                           <span className="text-red-700">✕</span> {item}
+                                         </span>
+                                       ))}
+                                     </div>
+                                     <button
+                                       type="button"
+                                       onClick={() => {
+                                         setLegalDocType('prohibited');
+                                         setLegalModalOpen(true);
+                                       }}
+                                       className="text-[10px] text-red-700 font-bold underline hover:text-red-900 cursor-pointer flex items-center gap-1 pt-0.5"
+                                     >
+                                       <span>View all 20 Sebastian County Landfill Prohibited Items →</span>
+                                     </button>
+                                   </div>
+                                 )}
 
                                 {/* Auto-Fill Description Quick Action */}
                                 {aiAnalysisResult.suggestedDescription && (
