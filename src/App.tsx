@@ -836,7 +836,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                 <span className="text-[11px] font-black text-[#ff6600] font-mono bg-orange-100 px-1.5 py-0.5 rounded">$12.47 Dump Fee</span>
                               </div>
                               <span className="block text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">
-                                Fort Smith resident flat landfill fee of <strong className="text-slate-900 font-bold">$12.47</strong> silently added to invoice. Ideal for fast single-truck cleanouts.
+                                Standard 6.5-ft pickup bed (holds up to ~7.5 cu yds packed tight to cab height). Fits 1–2 mattresses upright on rails, dressers, couches, boxes, yard bags, or garage debris with a flat <strong className="text-slate-900 font-bold">$12.47</strong> Fort Smith landfill fee.
                               </span>
                             </div>
                           </button>

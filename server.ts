@@ -220,7 +220,7 @@ Return ONLY a valid JSON object matching the requested schema.`;
       result.confidenceScore = sim.confidenceScore;
       result.briefAnalysis = sim.briefAnalysis;
 
-      // 2. Silently add the labor to the invoice in the background via Shopify Storefront API
+      // 2. Add calculated labor hours to Shopify Storefront API cart invoice
       const estimatedHours = sim.estimatedLaborHours;
 
       // Shopify Storefront API cart creation
