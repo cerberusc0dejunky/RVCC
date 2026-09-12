@@ -145,7 +145,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       <div>
         <h1 class="brand-title">River Valley <span>Cleanup</span> Crew</h1>
         <div class="meta-text">Fort Smith, AR • Licensed Hauler #L-783 • Commercial Liability Insured</div>
-        <div class="meta-text">Dispatch Phone: (479) 222-1311 • dispatch@rivervalleycrew.com</div>
+        <div class="meta-text">Dispatch Phone: (479) 222-1311 • rvcc@c0dejunky.com</div>
       </div>
       <div style="text-align: right;">
         <div class="badge ${job.paymentStatus === 'paid' ? 'badge-paid' : 'badge-pending'}">
@@ -294,7 +294,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                   Fort Smith, AR • Licensed Hauler #L-783 • Commercial Liability Insured
                 </p>
                 <p className="text-[11px] text-slate-600 font-mono">
-                  Hotline: (479) 222-1311 • dispatch@rivervalleycrew.com
+                  Hotline: (479) 222-1311 • rvcc@c0dejunky.com
                 </p>
               </div>
             </div>

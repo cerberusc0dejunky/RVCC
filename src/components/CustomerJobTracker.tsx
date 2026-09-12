@@ -144,24 +144,10 @@ export const CustomerJobTracker: React.FC<CustomerJobTrackerProps> = ({
             </button>
           </form>
 
-          <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+          <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2 text-xs font-mono">
             <span className="text-slate-400 text-[11px]">
               Available to anyone with a scheduled Ticket # or booking phone number.
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                setTicketInput('TKT-782104');
-                const sample = allJobs.find(j => j.ticketNumber === 'TKT-782104') || allJobs[0];
-                if (sample) {
-                  setCurrentJob(sample);
-                  setSearched(true);
-                }
-              }}
-              className="text-[11px] text-[#ff6600] hover:underline flex items-center gap-1 cursor-pointer font-bold"
-            >
-              <span>Test with demo ticket (TKT-782104)</span>
-            </button>
           </div>
         </div>
 

@@ -15,38 +15,13 @@ export async function onRequestPost(context) {
 
     const apiKey = env.GEMINI_API_KEY;
 
-    // Graceful fallback if GEMINI_API_KEY secret is not yet added in Cloudflare dashboard
+    // Enforce valid GEMINI_API_KEY
     if (!apiKey) {
-      console.log("[Gemini Scan] No GEMINI_API_KEY present in Cloudflare env. Returning intelligent estimate.");
-      return Response.json({
-        detectedItems: {
-          mattress: 0,
-          couch: 1,
-          appliance: 0,
-          tv_monitor: 0,
-          tire: 0,
-          yard_bag: 3
-        },
-        itemTags: [
-          { name: "3-Cushion Fabric Sofa", quantity: 1, category: "Furniture", isHeavy: true },
-          { name: "Heavy Contractor Bags", quantity: 3, category: "Trash", isHeavy: false },
-          { name: "Scrap Lumber & Trim", quantity: 1, category: "Construction", isHeavy: false }
-        ],
-        loadType: "truck",
-        truckLoadFraction: "1/2 Truck Bed",
-        volumeCubicYards: 4.5,
-        weightEstimate: "Medium (~650 lbs)",
-        primaryDebrisType: "Household & Bulky Furniture",
-        estimatedLaborHours: 2,
-        crewRecommendation: "2-Person Lifting Crew",
-        safetyFlags: ["Bulky sofa requires 2-person carry", "Curbside access available"],
-        recyclableDetected: true,
-        confidenceScore: 0.95,
-        checkoutUrl: "https://c0dejunky.com/cart/46871135060165:2",
-        url: "https://c0dejunky.com/cart/46871135060165:2",
-        briefAnalysis: "AI scanner identified 1 large sofa, 3 contractor bags of debris, and scrap lumber. Suitable for standard heavy-duty truck bed.",
-        suggestedDescription: "Curbside pickup of 1 three-cushion fabric sofa, 3 heavy-duty contractor trash bags, and assorted scrap wood boards. Easy truck access."
-      });
+      console.warn("[Gemini Scan] No GEMINI_API_KEY present in Cloudflare env.");
+      return Response.json(
+        { error: "Gemini Vision AI service is not configured (missing GEMINI_API_KEY). Please contact dispatch or describe items manually." },
+        { status: 503 }
+      );
     }
 
     const prompt = `You are an expert junk removal dispatcher and hazardous debris estimator for River Valley Cleanup Crew in Fort Smith, Arkansas.
@@ -136,7 +111,7 @@ Return ONLY a valid JSON object matching the requested schema with all required 
 
     // 2. Shopify Storefront API: Create cart with estimated hours
     const shopifyEndpoint = "https://c0dejunky.com/api/2024-01/graphql.json";
-    const storefrontAccessToken = env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || env.X_SHOPIFY_STOREFRONT_ACCESS_TOKEN || "YOUR_SHOPIFY_STOREFRONT_ACCESS_TOKEN";
+    const storefrontAccessToken = env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || env.X_SHOPIFY_STOREFRONT_ACCESS_TOKEN || "";
 
     const cartMutation = `
       mutation cartCreate($input: CartInput!) {
@@ -169,30 +144,32 @@ Return ONLY a valid JSON object matching the requested schema with all required 
 
     let checkoutUrl = `https://c0dejunky.com/cart/46871135060165:${estimatedHours}`;
 
-    try {
-      const shopifyRes = await fetch(shopifyEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Shopify-Storefront-Access-Token": storefrontAccessToken
-        },
-        body: JSON.stringify(shopifyPayload)
-      });
+    if (storefrontAccessToken && storefrontAccessToken.trim() !== "") {
+      try {
+        const shopifyRes = await fetch(shopifyEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Storefront-Access-Token": storefrontAccessToken
+          },
+          body: JSON.stringify(shopifyPayload)
+        });
 
-      if (shopifyRes.ok) {
-        const shopifyData = await shopifyRes.json();
-        const extractedUrl = shopifyData?.data?.cartCreate?.cart?.checkoutUrl;
-        if (extractedUrl) {
-          checkoutUrl = extractedUrl;
-        } else if (shopifyData?.data?.cartCreate?.userErrors?.length) {
-          console.warn("Shopify cartCreate userErrors:", shopifyData.data.cartCreate.userErrors);
+        if (shopifyRes.ok) {
+          const shopifyData = await shopifyRes.json();
+          const extractedUrl = shopifyData?.data?.cartCreate?.cart?.checkoutUrl;
+          if (extractedUrl) {
+            checkoutUrl = extractedUrl;
+          } else if (shopifyData?.data?.cartCreate?.userErrors?.length) {
+            console.warn("Shopify cartCreate userErrors:", shopifyData.data.cartCreate.userErrors);
+          }
+        } else {
+          const errText = await shopifyRes.text();
+          console.error("Shopify Storefront API error:", shopifyRes.status, errText);
         }
-      } else {
-        const errText = await shopifyRes.text();
-        console.error("Shopify Storefront API error:", shopifyRes.status, errText);
+      } catch (shopifyErr) {
+        console.error("Shopify checkout request failed:", shopifyErr);
       }
-    } catch (shopifyErr) {
-      console.error("Shopify checkout request failed:", shopifyErr);
     }
 
     return Response.json({

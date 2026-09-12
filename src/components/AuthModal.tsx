@@ -30,13 +30,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [showAdminUnlock, setShowAdminUnlock] = useState<boolean>(false);
   const [adminPasscode, setAdminPasscode] = useState<string>('');
-  const [adminError, setAdminError] = useState<string>('');
+  const [adminError, setAdminError] = useState('');
+  const [googleError, setGoogleError] = useState('');
 
   useEffect(() => {
     if (!isOpen) {
       setShowAdminUnlock(false);
-      setAdminError('');
       setAdminPasscode('');
+      setAdminError('');
+      setGoogleError('');
+      setLoadingProvider(null);
     }
   }, [isOpen]);
 
@@ -48,11 +51,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleGoogle = async () => {
-    setLoadingProvider('google');
-    const user = await signInWithGoogleAuth();
-    setLoadingProvider(null);
-    notifyUser(user);
-    onClose();
+    try {
+      setGoogleError('');
+      setLoadingProvider('google');
+      const user = await signInWithGoogleAuth();
+      setLoadingProvider(null);
+      notifyUser(user);
+      onClose();
+    } catch (err: any) {
+      setLoadingProvider(null);
+      setGoogleError(err?.message || 'Google sign-in could not be completed.');
+    }
   };
 
   const handleUnlockAdmin = (e: React.FormEvent) => {
@@ -62,7 +71,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const operatorUser: AuthUserProfile = {
         uid: 'operator-' + Date.now(),
         displayName: 'Crew Operator',
-        email: 'dispatch@rivervalleycrew.com',
+        email: 'rvcc@c0dejunky.com',
         provider: 'demo',
         role: 'operator'
       };
@@ -124,6 +133,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </svg>
             <span>{loadingProvider === 'google' ? 'Connecting...' : 'Sign In with Google'}</span>
           </button>
+          {googleError && (
+            <p className="text-xs text-red-400 font-mono mt-2 bg-red-950/40 p-2 rounded border border-red-800">
+              {googleError}
+            </p>
+          )}
         </div>
 
         {/* Direct Track Job Link without login */}

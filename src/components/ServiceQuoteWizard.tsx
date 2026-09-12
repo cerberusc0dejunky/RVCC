@@ -328,7 +328,7 @@ export default function ServiceQuoteWizard() {
         ticketNumber: generatedTicket,
         clientName: customerName || "Customer Near " + (customerZip || "Fort Smith"),
         clientPhone: customerPhone || "(479) 555-0101",
-        clientEmail: customerEmail || "dispatch@rivervalleycrew.com",
+        clientEmail: customerEmail || "rvcc@c0dejunky.com",
         address: serviceAddress || `Service near ${customerZip || "72901"}, AR`,
         zipCode: customerZip || "72901",
         selectedDate: new Date().toISOString().split("T")[0],

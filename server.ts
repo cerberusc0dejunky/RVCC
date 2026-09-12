@@ -36,37 +36,11 @@ async function startServer() {
       }
 
       if (!process.env.GEMINI_API_KEY || !ai) {
-        console.log("[Gemini Image Scan] No GEMINI_API_KEY present, generating intelligent mock scan analysis.");
-        return res.json({
-          detectedItems: {
-            mattress: 0,
-            couch: 1,
-            appliance: 0,
-            tv_monitor: 0,
-            tire: 0,
-            yard_bag: 3
-          },
-          itemTags: [
-            { name: "3-Cushion Fabric Sofa", quantity: 1, category: "Furniture", isHeavy: true },
-            { name: "Heavy Contractor Bags", quantity: 3, category: "Trash", isHeavy: false },
-            { name: "Scrap Lumber & Trim", quantity: 1, category: "Construction", isHeavy: false }
-          ],
-          loadType: "truck",
-          truckLoadFraction: "1/2 Truck Bed",
-          volumeCubicYards: 4.5,
-          weightEstimate: "Medium (~650 lbs)",
-          primaryDebrisType: "Household & Bulky Furniture",
-          estimatedLaborHours: 2,
-          crewRecommendation: "2-Person Lifting Crew",
-          safetyFlags: ["Bulky sofa requires 2-person carry", "Curbside access available"],
-          recyclableDetected: true,
-          confidenceScore: 0.95,
-          briefAnalysis: "AI scanner identified 1 large sofa, 3 contractor bags of debris, and scrap lumber. Suitable for standard heavy-duty truck bed.",
-          suggestedDescription: "Curbside pickup of 1 three-cushion fabric sofa, 3 heavy-duty contractor trash bags, and assorted scrap wood boards. Easy truck access."
-        });
+        console.warn("[Gemini Image Scan] No GEMINI_API_KEY present in server environment.");
+        return res.status(503).json({ error: "Gemini Vision AI is not configured (missing GEMINI_API_KEY)." });
       }
 
-      const prompt = `You are an expert junk removal dispatcher and hazardous debris estimator for Titan Junk Removal in Fort Smith, Arkansas.
+      const prompt = `You are an expert junk removal dispatcher and hazardous debris estimator for River Valley Cleanup Crew in Fort Smith, Arkansas.
 Carefully examine this photo of debris, scrap, trash, or discarded items and provide a thorough, professional assessment:
 
 1. Identify specific landfill-tracked items:
@@ -208,7 +182,7 @@ Return ONLY a valid JSON object matching the requested schema.`;
 
       // Shopify Storefront API cart creation
       const shopifyEndpoint = "https://c0dejunky.com/api/2024-01/graphql.json";
-      const storefrontAccessToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "YOUR_SHOPIFY_STOREFRONT_ACCESS_TOKEN";
+      const storefrontAccessToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "";
 
       const cartMutation = `
         mutation cartCreate($input: CartInput!) {
@@ -227,39 +201,41 @@ Return ONLY a valid JSON object matching the requested schema.`;
 
       let checkoutUrl = `https://c0dejunky.com/cart/46871135060165:${estimatedHours}`;
 
-      try {
-        const shopifyRes = await fetch(shopifyEndpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Shopify-Storefront-Access-Token": storefrontAccessToken
-          },
-          body: JSON.stringify({
-            query: cartMutation,
-            variables: {
-              input: {
-                lines: [
-                  {
-                    merchandiseId: "gid://shopify/ProductVariant/46871135060165",
-                    quantity: estimatedHours
-                  }
-                ]
+      if (storefrontAccessToken && storefrontAccessToken.trim() !== "") {
+        try {
+          const shopifyRes = await fetch(shopifyEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Shopify-Storefront-Access-Token": storefrontAccessToken
+            },
+            body: JSON.stringify({
+              query: cartMutation,
+              variables: {
+                input: {
+                  lines: [
+                    {
+                      merchandiseId: "gid://shopify/ProductVariant/46871135060165",
+                      quantity: estimatedHours
+                    }
+                  ]
+                }
               }
-            }
-          })
-        });
+            })
+          });
 
-        if (shopifyRes.ok) {
-          const shopifyData: any = await shopifyRes.json();
-          const extractedUrl = shopifyData?.data?.cartCreate?.cart?.checkoutUrl;
-          if (extractedUrl) {
-            checkoutUrl = extractedUrl;
-          } else if (shopifyData?.data?.cartCreate?.userErrors?.length) {
-            console.warn("Shopify cartCreate userErrors:", shopifyData.data.cartCreate.userErrors);
+          if (shopifyRes.ok) {
+            const shopifyData: any = await shopifyRes.json();
+            const extractedUrl = shopifyData?.data?.cartCreate?.cart?.checkoutUrl;
+            if (extractedUrl) {
+              checkoutUrl = extractedUrl;
+            } else if (shopifyData?.data?.cartCreate?.userErrors?.length) {
+              console.warn("Shopify cartCreate userErrors:", shopifyData.data.cartCreate.userErrors);
+            }
           }
+        } catch (shopifyErr) {
+          console.error("Shopify cart creation error:", shopifyErr);
         }
-      } catch (shopifyErr) {
-        console.error("Shopify cart creation error:", shopifyErr);
       }
 
       result.checkoutUrl = checkoutUrl;
@@ -295,7 +271,7 @@ Return ONLY a valid JSON object matching the requested schema.`;
       const endDateTime = `${date}T${endHour}-05:00`;
 
       const event = {
-        summary: title || `Titan Junk Pick Up - ${clientName}`,
+        summary: title || `River Valley Cleanup Crew - ${clientName}`,
         location: address,
         description: `${description || "No description provided."}\n\nClient Name: ${clientName}\nTime Slot: ${timeSlot}`,
         start: {
@@ -338,7 +314,7 @@ Return ONLY a valid JSON object matching the requested schema.`;
       const quantity = Math.max(1, Math.round(Number(hours || estimatedLaborHours || (total ? Math.max(1, Math.round(total / 75)) : 2))));
 
       const shopifyEndpoint = "https://c0dejunky.com/api/2024-01/graphql.json";
-      const storefrontAccessToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "YOUR_SHOPIFY_STOREFRONT_ACCESS_TOKEN";
+      const storefrontAccessToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "";
 
       const cartMutation = `
         mutation cartCreate($input: CartInput!) {
@@ -371,30 +347,32 @@ Return ONLY a valid JSON object matching the requested schema.`;
 
       let checkoutUrl = `https://c0dejunky.com/cart/46871135060165:${quantity}`;
 
-      try {
-        const shopifyRes = await fetch(shopifyEndpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Shopify-Storefront-Access-Token": storefrontAccessToken
-          },
-          body: JSON.stringify(shopifyPayload)
-        });
+      if (storefrontAccessToken && storefrontAccessToken.trim() !== "") {
+        try {
+          const shopifyRes = await fetch(shopifyEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Shopify-Storefront-Access-Token": storefrontAccessToken
+            },
+            body: JSON.stringify(shopifyPayload)
+          });
 
-        if (shopifyRes.ok) {
-          const shopifyData: any = await shopifyRes.json();
-          const extractedUrl = shopifyData?.data?.cartCreate?.cart?.checkoutUrl;
-          if (extractedUrl) {
-            checkoutUrl = extractedUrl;
-          } else if (shopifyData?.data?.cartCreate?.userErrors?.length) {
-            console.warn("Shopify cartCreate userErrors:", shopifyData.data.cartCreate.userErrors);
+          if (shopifyRes.ok) {
+            const shopifyData: any = await shopifyRes.json();
+            const extractedUrl = shopifyData?.data?.cartCreate?.cart?.checkoutUrl;
+            if (extractedUrl) {
+              checkoutUrl = extractedUrl;
+            } else if (shopifyData?.data?.cartCreate?.userErrors?.length) {
+              console.warn("Shopify cartCreate userErrors:", shopifyData.data.cartCreate.userErrors);
+            }
+          } else {
+            const errText = await shopifyRes.text();
+            console.error("Shopify Storefront API error:", shopifyRes.status, errText);
           }
-        } else {
-          const errText = await shopifyRes.text();
-          console.error("Shopify Storefront API error:", shopifyRes.status, errText);
+        } catch (shopifyErr) {
+          console.error("Shopify checkout request error:", shopifyErr);
         }
-      } catch (shopifyErr) {
-        console.error("Shopify checkout request error:", shopifyErr);
       }
 
       return res.json({

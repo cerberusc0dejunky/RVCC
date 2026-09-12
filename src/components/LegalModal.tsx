@@ -163,7 +163,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({
                 <li>Select <strong>River Valley Cleanup Crew</strong> and click <strong>Remove</strong>.</li>
               </ol>
               <p className="pt-1">
-                To request an immediate purge of your service history or debris photos from our records, email our dispatch at <strong className="text-slate-900">dispatch@rivervalleycleanupcrew.com</strong> or call (479) 222-1311.
+                To request an immediate purge of your service history or debris photos from our records, email our dispatch at <strong className="text-slate-900">rvcc@c0dejunky.com</strong> or call (479) 222-1311.
               </p>
               <div className="pt-2">
                 <a 

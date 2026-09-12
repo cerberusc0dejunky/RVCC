@@ -146,15 +146,7 @@ export default function App() {
   const [currentSlide, setCurrentSlide] = useState<number>(1);
   const totalSlides = 7;
 
-  // Facebook Authentication State
-  const [fbUser, setFbUser] = useState<{
-    id: string;
-    name: string;
-    email: string;
-    picture: string;
-  } | null>(null);
-  const [fbChecking, setFbChecking] = useState<boolean>(false);
-  const [fbStatusMessage, setFbStatusMessage] = useState<string>('Unauthenticated');
+
 
   // Input states
   const [zipCode, setZipCode] = useState<string>('');
@@ -237,15 +229,8 @@ export default function App() {
   const [contactAddress, setContactAddress] = useState<string>('');
   const [specialNotes, setSpecialNotes] = useState<string>('');
 
-  // Stripe payments
-  const [showStripeSimulated, setShowStripeSimulated] = useState<boolean>(false);
+  // Booking processing state
   const [stripeProcessing, setStripeProcessing] = useState<boolean>(false);
-  const [stripeCardNumber, setStripeCardNumber] = useState<string>('');
-  const [stripeExpiry, setStripeExpiry] = useState<string>('');
-  const [stripeCvc, setStripeCvc] = useState<string>('');
-  const [stripeZip, setStripeZip] = useState<string>('');
-  const [stripeError, setStripeError] = useState<string>('');
-  const [stripePaymentSuccess, setStripePaymentSuccess] = useState<boolean>(false);
 
   // Validation
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
@@ -299,41 +284,7 @@ export default function App() {
     setSelectedDate(datesList[0].dateString);
   }, []);
 
-  // Set up Facebook Meta SDK Simulation
-  useEffect(() => {
-    (window as any).fbAsyncInit = function() {
-      if ((window as any).FB) {
-        (window as any).FB.init({
-          appId: '123456789012345',
-          cookie: true,
-          xfbml: true,
-          version: 'v18.0'
-        });
-      }
-    };
-  }, []);
 
-  const handleFacebookLogin = () => {
-    setFbChecking(true);
-    setTimeout(() => {
-      setFbChecking(false);
-      const mockUser = {
-        id: 'fb-' + Math.floor(Math.random() * 1000000),
-        name: 'Jane Cooper (Meta Authed)',
-        email: 'jane.cooper@rivervalleymail.com',
-        picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120&h=120'
-      };
-      setFbUser(mockUser);
-      setContactName(mockUser.name);
-      setContactEmail(mockUser.email);
-      setFbStatusMessage('Connected');
-    }, 800);
-  };
-
-  const handleFacebookLogout = () => {
-    setFbUser(null);
-    setFbStatusMessage('Unauthenticated');
-  };
 
   // Adjust catalog item quantities
   const adjustQuantity = (itemId: string, direction: 'up' | 'down') => {
@@ -497,80 +448,6 @@ export default function App() {
     }
   };
 
-  const handleLoadSamplePhoto = async (sampleType: 'furniture' | 'remodel') => {
-    setIsAiAnalyzing(true);
-    setAiError('');
-
-    let sampleUrl = '';
-    let sampleTitle = '';
-    
-    if (sampleType === 'furniture') {
-      sampleUrl = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=800';
-      sampleTitle = 'Curbside Furniture & Bulky Clutter';
-    } else {
-      sampleUrl = 'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&q=80&w=800';
-      sampleTitle = 'Garage Renovation Scrap & Lumber';
-    }
-
-    const samplePhoto: PhotoFile = {
-      id: `sample-${Date.now()}`,
-      name: sampleTitle,
-      size: '1.45 MB (Sample)',
-      previewUrl: sampleUrl,
-      base64: 'sample_debris_photo',
-      mimeType: 'image/jpeg'
-    };
-    setUploadedPhotos([samplePhoto]);
-
-    // Fast, realistic client-side scan
-    await new Promise(r => setTimeout(r, 750));
-    const isFurniture = sampleType === 'furniture';
-    const data = {
-      detectedItems: {
-        mattress: 0,
-        couch: isFurniture ? 1 : 0,
-        appliance: 0,
-        tv_monitor: 0,
-        tire: 0,
-        yard_bag: isFurniture ? 2 : 4
-      },
-      itemTags: isFurniture ? [
-        { name: "3-Cushion Fabric Sofa", quantity: 1, category: "Furniture", isHeavy: true },
-        { name: "Contractor Cleanup Bags", quantity: 2, category: "Trash", isHeavy: false },
-        { name: "Bulky Household Clutter", quantity: 1, category: "Household", isHeavy: false }
-      ] : [
-        { name: "Drywall & Wood Stud Scrap", quantity: 1, category: "Construction", isHeavy: true },
-        { name: "Contractor Debris Bags", quantity: 4, category: "Trash", isHeavy: false },
-        { name: "Demolition Trim Boards", quantity: 1, category: "Construction", isHeavy: false }
-      ],
-      loadType: (isFurniture ? "truck" : "trailer") as 'truck' | 'trailer',
-      truckLoadFraction: isFurniture ? "1/2 Truck Bed" : "Full Bed",
-      volumeCubicYards: isFurniture ? 4.5 : 7.5,
-      weightEstimate: isFurniture ? "Medium (~600 lbs)" : "Heavy (~1,150 lbs)",
-      primaryDebrisType: isFurniture ? "Household & Bulky Furniture" : "Renovation & Remodel Debris",
-      estimatedLaborHours: isFurniture ? 2 : 3,
-      requiresTrailer: !isFurniture,
-      suggestedDescription: isFurniture 
-        ? "Curbside residential clutter: 1 fabric sofa and bagged debris."
-        : "Garage cleanout renovation: studs, scrap lumber, drywall, and contractor bags.",
-      hazardousFlags: isFurniture ? [] : ["Check for nails / sharp metal edges"],
-      pricingRecommendation: isFurniture 
-        ? "Standard truck load with flat $25 gate fee."
-        : "High-capacity trailer load recommended for renovation debris.",
-      briefAnalysis: isFurniture 
-        ? "AI scanner identified 1 sofa and contractor bags. Suitable for standard pickup bed."
-        : "AI scanner identified renovation lumber, drywall, and contractor bags. Trailer recommended.",
-      confidenceScore: 0.95
-    };
-
-    setAiAnalysisResult(data);
-    setHaulType(data.loadType);
-    setLaborHours(data.estimatedLaborHours);
-    if (!junkDescription.trim()) {
-      setJunkDescription(data.suggestedDescription);
-    }
-    setIsAiAnalyzing(false);
-  };
 
   // Custom step navigation checks
   const validateSlideChange = (targetSlide: number) => {
@@ -636,7 +513,6 @@ export default function App() {
   // Execute Payment via Shopify Storefront checkout
   const handlePayNow = async () => {
     try {
-      setStripeError('');
       // If already generated from Gemini image analysis, redirect directly to Shopify cart checkout
       if (aiAnalysisResult?.checkoutUrl) {
         window.location.href = aiAnalysisResult.checkoutUrl;
@@ -652,7 +528,7 @@ export default function App() {
             items: haulType === 'truck' ? 'Standard Truck Load flat' : 'Trailer items selection',
             total: pricing.total,
             hours: laborHours || aiAnalysisResult?.estimatedLaborHours || 2,
-            contactEmail: contactEmail || 'booking@titanjunk.com'
+            contactEmail: contactEmail || 'rvcc@c0dejunky.com'
           })
         });
         if (response.ok) {
@@ -673,42 +549,6 @@ export default function App() {
       const hours = Math.max(1, laborHours || aiAnalysisResult?.estimatedLaborHours || 2);
       window.location.href = `https://c0dejunky.com/cart/46871135060165:${hours}`;
     }
-  };
-
-  const submitSimulatedPayment = (e: React.FormEvent) => {
-    e.preventDefault();
-    setStripeError('');
-    if (!stripeCardNumber.trim() || stripeCardNumber.replace(/\s/g, '').length < 16) {
-      setStripeError('Please enter a valid 16 digit card number.');
-      return;
-    }
-    if (!stripeExpiry.trim()) {
-      setStripeError('Please enter card expiration date (MM/YY).');
-      return;
-    }
-    if (!stripeCvc.trim() || stripeCvc.length < 3) {
-      setStripeError('Please enter 3-digit CVC security code.');
-      return;
-    }
-
-    setStripeProcessing(true);
-    setTimeout(() => {
-      setStripeProcessing(false);
-      setStripePaymentSuccess(true);
-      setTimeout(() => {
-        // Finalize successfully paid ticket
-        setShowStripeSimulated(false);
-        const ticketNum = `TKT-${Math.floor(100000 + Math.random() * 900000)}`;
-        setGeneratedTicket({
-          ticketNumber: ticketNum,
-          createdAt: new Date().toLocaleString(),
-          paymentMethod: 'stripe',
-          paymentStatus: 'paid',
-          total: pricing.total
-        });
-        setStep('success');
-      }, 1000);
-    }, 1500);
   };
 
   const handlePayOnArrival = () => {
@@ -756,156 +596,20 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
-      
-      {/* 1. Brand Header */}
-      <header className="bg-[#1a1a1a] text-white border-b-4 border-[#ff6600] py-3.5 px-4 sm:px-6 shadow-lg no-print">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          
-          {/* Logo & Brand Name */}
-          <div className="flex items-center space-x-3.5 cursor-pointer" onClick={() => setActiveView('estimator')}>
-            <div className="relative w-12 h-12 rounded-full border-2 border-[#ff6600] shadow-md overflow-hidden bg-black/60 flex items-center justify-center p-0.5 shrink-0">
-              <img 
-                src={logoImg} 
-                alt="River Valley Cleanup Crew Logo" 
-                className="w-full h-full object-cover rounded-full"
-              />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight uppercase font-display select-none flex items-center gap-2">
-                River Valley <span className="text-[#ff6600]">Cleanup</span> Crew
-              </h1>
-              <p className="text-[10px] tracking-widest text-slate-400 font-mono font-bold uppercase">
-                Fort Smith & River Valley Arkansas • Junk Hauling & Demo
-              </p>
-            </div>
-          </div>
-
-          {/* Navigation Views Switcher */}
-          <nav className="flex items-center bg-zinc-900/90 p-1 rounded-xl border border-zinc-800 shadow-inner">
-            <button
-              onClick={() => setActiveView('estimator')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-black uppercase font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeView === 'estimator'
-                  ? 'bg-[#ff6600] text-black shadow-md'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
-              }`}
-            >
-              <Truck className="w-3.5 h-3.5" />
-              <span>Estimator</span>
-            </button>
-
-            {/* Track Job is accessible to everyone */}
-            <button
-              onClick={() => setActiveView('customer_tracker')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-black uppercase font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeView === 'customer_tracker'
-                  ? 'bg-[#ff6600] text-black shadow-md'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
-              }`}
-            >
-              <SearchCheck className="w-3.5 h-3.5" />
-              <span>Track Job</span>
-            </button>
-
-            {/* User Account / Receipts & Custom Bids */}
-            <button
-              onClick={() => {
-                if (currentUser) {
-                  setActiveView('user_account');
-                } else {
-                  setActiveView('user_account');
-                }
-              }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-black uppercase font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeView === 'user_account'
-                  ? 'bg-[#ff6600] text-black shadow-md'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>My Account</span>
-            </button>
-
-            {/* Dispatch Board is ONLY visible if user is logged in as Facebook Page Admin / Operator */}
-            {currentUser?.role === 'operator' && (
-              <button
-                onClick={() => setActiveView('operator_dashboard')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-black uppercase font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
-                  activeView === 'operator_dashboard'
-                    ? 'bg-[#ff6600] text-black shadow-md'
-                    : 'text-amber-400 hover:text-amber-300 hover:bg-zinc-800/60'
-                }`}
-              >
-                <LayoutDashboard className="w-3.5 h-3.5" />
-                <span>Dispatch Board</span>
-              </button>
-            )}
-          </nav>
-
-          {/* Auth & Dispatch Hotline */}
-          <div className="flex items-center space-x-3">
-            {currentUser ? (
-              <div className="flex items-center space-x-2 bg-[#2a2a2a] pl-2 py-1 pr-3 rounded-full border border-slate-700 shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => setActiveView('user_account')}
-                  className="flex items-center space-x-2 text-left cursor-pointer hover:opacity-90"
-                  title="Open Account & Receipts"
-                >
-                  <img 
-                    src={currentUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120&h=120'} 
-                    alt={currentUser.displayName} 
-                    className="w-7 h-7 rounded-full object-cover border border-[#ff6600]"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div>
-                    <span className="block text-xs font-bold text-slate-100 max-w-[110px] truncate leading-none">
-                      {currentUser.displayName}
-                    </span>
-                    <span className={`inline-flex items-center text-[9px] font-mono font-bold uppercase ${currentUser.role === 'operator' ? 'text-amber-400' : 'text-cyan-400'}`}>
-                      {currentUser.role === 'operator' ? 'Operator' : 'Customer'}
-                    </span>
-                  </div>
-                </button>
-                <button 
-                  onClick={() => {
-                    signOutAuth();
-                    setCurrentUser(null);
-                    setActiveView('estimator');
-                  }} 
-                  title="Sign Out"
-                  className="text-[10px] font-bold text-red-400 hover:text-red-300 underline ml-1 cursor-pointer transition-colors"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button 
-                onClick={() => {
-                  setAuthModalInitialRole('customer');
-                  setAuthModalOpen(true);
-                }}
-                className="bg-gradient-to-r from-zinc-800 to-zinc-900 hover:from-zinc-700 hover:to-zinc-800 text-white text-xs font-extrabold px-3 py-1.5 rounded-lg flex items-center space-x-2 transition-all border border-zinc-700 cursor-pointer shadow-xs hover:border-[#ff6600]"
-              >
-                <LogIn className="w-3.5 h-3.5 text-[#ff6600]" />
-                <span>Portal Login</span>
-              </button>
-            )}
-            
-            <div className="hidden lg:flex flex-col text-right border-l border-slate-700 pl-3.5">
-              <span className="text-[9px] text-slate-400 font-semibold uppercase font-mono leading-none">Hotline</span>
-              <a href="tel:4792221311" className="text-sm font-black text-[#ff6600] tracking-tight hover:underline font-mono">
-                (479) 222-1311
-              </a>
-            </div>
-          </div>
-
-        </div>
-      </header>
 
       {/* View 1: Operator Dispatch Dashboard */}
       {activeView === 'operator_dashboard' && currentUser?.role === 'operator' && (
         <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+          <div className="mb-4 flex items-center justify-between border-b pb-3">
+            <button
+              onClick={() => setActiveView('estimator')}
+              className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold font-mono hover:bg-slate-800 cursor-pointer flex items-center gap-1.5"
+            >
+              <Truck className="w-3.5 h-3.5 text-[#ff6600]" />
+              <span>← Back to Estimator</span>
+            </button>
+            <span className="text-xs font-mono font-bold text-amber-500">Operator Mode Active</span>
+          </div>
           <DispatchDashboard onNavigateToEstimator={() => setActiveView('estimator')} />
         </main>
       )}
@@ -913,6 +617,16 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
       {/* View 2: Customer Job Status Tracker */}
       {activeView === 'customer_tracker' && (
         <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+          <div className="mb-4 flex items-center justify-between border-b pb-3">
+            <button
+              onClick={() => setActiveView('estimator')}
+              className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold font-mono hover:bg-slate-800 cursor-pointer flex items-center gap-1.5"
+            >
+              <Truck className="w-3.5 h-3.5 text-[#ff6600]" />
+              <span>← Back to Estimator</span>
+            </button>
+            <span className="text-xs font-mono text-slate-500">Job Tracking Portal</span>
+          </div>
           <CustomerJobTracker 
             initialTicketNumber={trackingTicketNumber} 
             onNavigateToEstimator={() => setActiveView('estimator')} 
@@ -923,6 +637,16 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
       {/* View 3: Customer User Account Page (Receipts & Custom Job Bids) */}
       {activeView === 'user_account' && (
         <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+          <div className="mb-4 flex items-center justify-between border-b pb-3">
+            <button
+              onClick={() => setActiveView('estimator')}
+              className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold font-mono hover:bg-slate-800 cursor-pointer flex items-center gap-1.5"
+            >
+              <Truck className="w-3.5 h-3.5 text-[#ff6600]" />
+              <span>← Back to Estimator</span>
+            </button>
+            <span className="text-xs font-mono text-slate-500">My Account</span>
+          </div>
           <UserAccountPage 
             currentUser={currentUser}
             onNavigateToEstimator={() => setActiveView('estimator')} 
@@ -941,57 +665,13 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
         </main>
       )}
 
-      {/* View 4: Customer Estimator & Booking Wizard */}
+      {/* View 4: Customer Estimator & Booking Wizard (Starts directly at the top) */}
       {activeView === 'estimator' && (
         <>
-          {/* Hero Header Banner */}
-          {step === 'wizard' && (
-            <div className="relative w-full overflow-hidden border-b-4 border-[#1a1a1a] no-print" style={{ height: '220px' }}>
-          <img 
-            src={dodgeTruckImg}
-            alt="River Valley Cleanup Crew Rig"
-            className="w-full h-full object-cover brightness-[0.5]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-black/40 to-transparent flex flex-col justify-end p-6">
-            <div className="max-w-5xl w-full mx-auto text-left flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-              <div>
-                <span className="bg-[#ff6600] text-[#1a1a1a] text-[10px] sm:text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-xs font-mono inline-block mb-1.5 shadow-xs">
-                  Lite, User-Friendly Booking
-                </span>
-                <div className="flex items-center gap-3">
-                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-tight font-display drop-shadow-md">
-                    Curious?
-                  </h2>
-                  <div className="hidden sm:flex items-center gap-1.5 text-amber-400 font-mono text-xs font-black uppercase animate-pulse">
-                    <span>See our work</span>
-                    <ArrowRight className="w-5 h-5 text-[#ff6600]" />
-                  </div>
-                </div>
-              </div>
+          {/* Main Container */}
+          <main className="flex-1 max-w-5xl w-full mx-auto p-2 sm:p-4 flex flex-col justify-start">
+            {step === 'wizard' ? (
 
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                <span className="sm:hidden text-amber-400 font-mono text-[11px] font-black uppercase flex items-center gap-1">
-                  <span>See our work</span>
-                  <ArrowRight className="w-4 h-4 text-[#ff6600]" />
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowWhatWeDoModal(true)}
-                  className="bg-gradient-to-r from-[#ff6600] to-amber-500 hover:from-[#e55c00] hover:to-amber-600 text-black px-4 py-2.5 rounded-xl text-xs font-black uppercase font-mono flex items-center gap-2 transition-all cursor-pointer shadow-lg hover:scale-105 shrink-0 border border-amber-300/40"
-                >
-                  <Sparkles className="w-4 h-4 text-black" />
-                  <span>What do we do?</span>
-                  <ArrowRight className="w-4 h-4 text-black stroke-[3]" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-center">
-        {step === 'wizard' ? (
           (() => {
             const shouldShowInvoiceSidebar = currentSlide === 7 && isCostCalculated && haulType !== 'appliance';
             return (
@@ -1328,29 +1008,8 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                               AI Visual Scrap & Debris Scanner
                             </h3>
                             <p className="text-xs text-slate-500 font-medium">
-                              Upload a photo or choose a sample. Gemini Vision analyzes debris volume, load category, crew hours, and safety needs.
+                              Upload a photo of your debris. Gemini Vision analyzes volume, load category, crew hours, and safety needs.
                             </p>
-                          </div>
-                          
-                          {/* 1-Click Sample Preset Buttons for Instant Live Testing */}
-                          <div className="flex items-center gap-1.5 shrink-0 bg-slate-100 p-1 rounded-lg border border-slate-200">
-                            <span className="text-[9px] font-mono font-bold uppercase text-slate-500 pl-1">Demo:</span>
-                            <button
-                              type="button"
-                              onClick={() => handleLoadSamplePhoto('furniture')}
-                              disabled={isAiAnalyzing}
-                              className="text-[10px] font-bold bg-white hover:bg-slate-50 text-slate-700 px-2.5 py-1 rounded border border-slate-200 cursor-pointer transition-colors shadow-2xs"
-                            >
-                              🛋️ Furniture Pile
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleLoadSamplePhoto('remodel')}
-                              disabled={isAiAnalyzing}
-                              className="text-[10px] font-bold bg-white hover:bg-slate-50 text-slate-700 px-2.5 py-1 rounded border border-slate-200 cursor-pointer transition-colors shadow-2xs"
-                            >
-                              🪵 Remodel Scrap
-                            </button>
                           </div>
                         </div>
 
@@ -1375,9 +1034,6 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                 </span>
                                 <span className="block text-[10px] text-slate-400 mt-1 font-semibold">
                                   Drag & drop or click to browse (PNG, JPEG, WEBP)
-                                </span>
-                                <span className="inline-block mt-3 px-2 py-0.5 rounded bg-slate-200 text-slate-600 text-[9px] font-mono font-bold">
-                                  or click a demo sample above ↗
                                 </span>
                               </div>
                             ) : (
@@ -1561,7 +1217,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                 <div className="space-y-1">
                                   <p className="font-bold text-xs text-slate-600">No Debris Picture Loaded</p>
                                   <p className="text-[10px] text-slate-400 max-w-[240px] leading-tight">
-                                    Upload your photo or click a demo sample to trigger instant Gemini AI volumetric & vehicle estimation.
+                                    Upload your photo to trigger instant Gemini AI volumetric & vehicle estimation.
                                   </p>
                                 </div>
                                 <div className="pt-2 text-[9px] text-slate-400 font-mono space-y-0.5">
@@ -1686,71 +1342,15 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                               </div>
                             </div>
 
-                            {/* Billing Address and Card Authorization Section if Stripe is selected */}
                             {paymentOption === 'stripe' ? (
-                              <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3 text-xs">
-                                <span className="font-mono font-black text-[9px] uppercase text-[#ff6600]">Secure Card Payment Authorization</span>
-                                
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                  <div className="space-y-1">
-                                    <label className="block text-[9px] font-mono uppercase font-black text-slate-500">Credit Card Number</label>
-                                    <input 
-                                      type="text" 
-                                      maxLength={19}
-                                      placeholder="4242 •••• •••• 4242" 
-                                      className="w-full px-2.5 py-1.5 border rounded bg-white font-mono text-xs focus:ring-1 focus:ring-[#ff6600]"
-                                    />
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                      <label className="block text-[9px] font-mono uppercase font-black text-slate-500">Exp Date</label>
-                                      <input 
-                                        type="text" 
-                                        placeholder="MM/YY" 
-                                        className="w-full px-2.5 py-1.5 border rounded bg-white font-mono text-xs text-center focus:ring-1 focus:ring-[#ff6600]"
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="block text-[9px] font-mono uppercase font-black text-slate-500">CVC</label>
-                                      <input 
-                                        type="text" 
-                                        placeholder="123" 
-                                        className="w-full px-2.5 py-1.5 border rounded bg-white font-mono text-xs text-center focus:ring-1 focus:ring-[#ff6600]"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="pt-2 border-t border-slate-200">
-                                  <div className="flex items-center space-x-2 mb-2">
-                                    <input 
-                                      type="checkbox" 
-                                      id="syncBillingCheckbox"
-                                      checked={billingAddressSameAsPickup}
-                                      onChange={(e) => {
-                                        setBillingAddressSameAsPickup(e.target.checked);
-                                        if (e.target.checked) {
-                                          setBillingAddress(contactAddress || '');
-                                        }
-                                      }}
-                                      className="rounded border-slate-300 text-[#ff6600] focus:ring-[#ff6600]"
-                                    />
-                                    <label htmlFor="syncBillingCheckbox" className="font-semibold text-slate-700 cursor-pointer select-none">
-                                      Billing Address is same as Service Address
-                                    </label>
-                                  </div>
-
-                                  <div className="space-y-1">
-                                    <label className="block text-[9px] font-mono uppercase font-black text-slate-500">Billing Postal / Street Address</label>
-                                    <input 
-                                      type="text" 
-                                      value={billingAddress}
-                                      onChange={(e) => setBillingAddress(e.target.value)}
-                                      placeholder="123 N Albert Pike Ave, Fort Smith, AR 72904" 
-                                      className="w-full px-2.5 py-1.5 border rounded bg-white text-xs focus:ring-1 focus:ring-[#ff6600]"
-                                    />
-                                  </div>
-                                </div>
+                              <div className="p-4 bg-orange-50/50 border border-orange-200 rounded-lg text-xs space-y-2 leading-snug">
+                                <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                                  <CreditCard className="w-4 h-4 text-[#ff6600]" />
+                                  Secure Online Checkout (Shopify Storefront)
+                                </p>
+                                <p className="text-slate-600">
+                                  You will be redirected to complete your payment securely via Shopify Checkout in Step 7 before crew dispatch.
+                                </p>
                               </div>
                             ) : (
                               <div className="p-4 bg-amber-50/50 border border-amber-200 rounded-lg text-xs space-y-1.5 leading-snug">
@@ -1848,7 +1448,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                   type="text"
                                   value={contactName}
                                   onChange={(e) => setContactName(e.target.value)}
-                                  placeholder="Jane Cooper"
+                                  placeholder="Full Name"
                                   className="w-full px-2.5 py-1.5 border rounded bg-white text-xs focus:ring-1 focus:ring-[#ff6600]"
                                 />
                               </div>
@@ -1858,7 +1458,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                   type="email"
                                   value={contactEmail}
                                   onChange={(e) => setContactEmail(e.target.value)}
-                                  placeholder="jane@rivervalleymail.com"
+                                  placeholder="customer@example.com"
                                   className="w-full px-2.5 py-1.5 border rounded bg-white text-xs focus:ring-1 focus:ring-[#ff6600]"
                                 />
                               </div>
@@ -2016,7 +1616,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                 setContactName(e.target.value);
                                 setValidationErrors(prev => ({ ...prev, name: '' }));
                               }}
-                              placeholder="Jane Cooper"
+                              placeholder="Full Name"
                               className={`w-full px-3 py-2 border rounded text-xs font-bold ${validationErrors.name ? 'border-red-500' : 'border-slate-350 bg-white'}`}
                             />
                             {validationErrors.name && <p className="text-[10px] font-bold text-red-600">{validationErrors.name}</p>}
@@ -2043,7 +1643,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                               type="email"
                               value={contactEmail}
                               onChange={(e) => setContactEmail(e.target.value)}
-                              placeholder="jane@rivervalleymail.com"
+                              placeholder="customer@example.com"
                               className="w-full px-3 py-2 border rounded text-xs font-bold border-slate-350 bg-white"
                             />
                           </div>
@@ -2489,152 +2089,6 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
       </main>
       </>
       )}
-
-      {/* Stripe Checkout Simulated Overlay (High fidelity, secure look) */}
-      <AnimatePresence>
-        {showStripeSimulated && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 no-print"
-          >
-            <motion.div 
-              initial={{ scale: 0.95, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
-              className="bg-white max-w-md w-full rounded-xl border border-slate-200 overflow-hidden shadow-2xl flex flex-col justify-between text-left"
-            >
-              {/* Stripe Header Brand */}
-              <div className="bg-[#635bff] text-white p-5 flex justify-between items-center">
-                <div className="flex items-center space-x-2.5">
-                  <CreditCard className="w-5 h-5 text-white stroke-[2.5]" />
-                  <span className="font-sans font-black tracking-wider uppercase text-sm">Secure Checkout</span>
-                </div>
-                <div className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono tracking-wider">
-                  Card Checkout
-                </div>
-              </div>
-
-              {/* Order total amount statement */}
-              <div className="bg-slate-50 border-b border-slate-150 px-6 py-4 flex justify-between items-center">
-                <div>
-                  <span className="block text-[10px] font-black uppercase text-slate-400 font-mono">Paying River Valley Cleanup Crew</span>
-                  <span className="block text-xs font-bold text-slate-700 truncate max-w-[200px]">{contactEmail || "dispatch@rivervalleycleanupcrew.com"}</span>
-                </div>
-                <span className="text-xl font-mono font-black text-[#635bff]">${pricing.total.toFixed(2)}</span>
-              </div>
-
-              {/* Form Input fields */}
-              <form onSubmit={submitSimulatedPayment} className="p-6 space-y-4">
-                
-                {stripeError && (
-                  <div className="p-3 bg-red-50 text-red-800 border border-red-200 rounded text-xs font-mono">
-                    <span className="font-bold block">Payment Error:</span> {stripeError}
-                  </div>
-                )}
-
-                {stripePaymentSuccess ? (
-                  <div className="py-6 flex flex-col items-center justify-center text-center space-y-2">
-                    <div className="p-3 bg-emerald-100 text-emerald-800 rounded-full animate-bounce">
-                      <Check className="w-8 h-8 stroke-[3.5]" />
-                    </div>
-                    <span className="block text-base font-black text-slate-900">Payment Authorized</span>
-                    <span className="block text-xs text-slate-400 font-semibold font-mono">Processing checkout receipt...</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-1 text-xs">
-                      <label className="block text-[10px] font-black uppercase text-slate-500 font-mono">Card number</label>
-                      <div className="relative">
-                        <CreditCard className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                        <input 
-                          type="text"
-                          maxLength={19}
-                          value={stripeCardNumber}
-                          onChange={(e) => {
-                            // format card number with spaces every 4 characters
-                            const clean = e.target.value.replace(/\s/g, '').replace(/\D/g, '');
-                            const formatted = clean.match(/.{1,4}/g)?.join(' ') || clean;
-                            setStripeCardNumber(formatted);
-                          }}
-                          placeholder="4242 4242 4242 4242"
-                          className="w-full pl-9 pr-3 py-2.5 border rounded text-xs font-bold font-mono focus:outline-none focus:ring-2 focus:ring-[#635bff] border-slate-300"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-black uppercase text-slate-500 font-mono">Expiration (MM/YY)</label>
-                        <input 
-                          type="text"
-                          maxLength={5}
-                          value={stripeExpiry}
-                          onChange={(e) => {
-                            const clean = e.target.value.replace(/\D/g, '');
-                            let formatted = clean;
-                            if (clean.length > 2) {
-                              formatted = `${clean.substring(0, 2)}/${clean.substring(2, 4)}`;
-                            }
-                            setStripeExpiry(formatted);
-                          }}
-                          placeholder="12/28"
-                          className="w-full px-3 py-2.5 border rounded text-xs font-bold font-mono focus:outline-none focus:ring-2 focus:ring-[#635bff] border-slate-300 text-center"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-black uppercase text-slate-500 font-mono">CVC Code</label>
-                        <input 
-                          type="password"
-                          maxLength={4}
-                          value={stripeCvc}
-                          onChange={(e) => setStripeCvc(e.target.value.replace(/\D/g, ''))}
-                          placeholder="•••"
-                          className="w-full px-3 py-2.5 border rounded text-xs font-bold font-mono focus:outline-none focus:ring-2 focus:ring-[#635bff] border-slate-300 text-center"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 text-xs">
-                      <label className="block text-[10px] font-black uppercase text-slate-500 font-mono">Billing postal zip code</label>
-                      <input 
-                        type="text"
-                        maxLength={5}
-                        value={stripeZip}
-                        onChange={(e) => setStripeZip(e.target.value.replace(/\D/g, ''))}
-                        placeholder="72901"
-                        className="w-full px-3 py-2.5 border rounded text-xs font-bold font-mono focus:outline-none focus:ring-2 focus:ring-[#635bff] border-slate-300"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={stripeProcessing}
-                      className="w-full bg-[#635bff] hover:bg-indigo-600 text-white font-black uppercase text-xs py-3 rounded transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
-                    >
-                      <Lock className="w-4 h-4" />
-                      <span>{stripeProcessing ? 'Processing payment...' : `Authorize Charge $${pricing.total.toFixed(2)}`}</span>
-                    </button>
-                  </>
-                )}
-
-                <div className="text-center pt-1 border-t border-slate-100 select-none">
-                  <button
-                    type="button"
-                    onClick={() => setShowStripeSimulated(false)}
-                    className="text-[10px] text-slate-450 hover:text-slate-600 font-bold uppercase transition-colors"
-                  >
-                    Cancel Secure Payment
-                  </button>
-                </div>
-
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* What We Do - Before & After Slideshow Modal */}
       <WhatWeDoModal 

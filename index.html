@@ -3,11 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Fort Smith Scrap & Cleanup</title>
+    <title>RVCC App</title>
     <meta name="description" content="Simple dispatch portal for scrap metal, appliance removals, and general landfill cleanup hauling with live cost pricing estimation, PDF slip printing, and email crew dispatch." />
-    <meta property="og:title" content="Fort Smith Scrap & Cleanup" />
-    <meta property="og:description" content="Simple dispatch portal for scrap metal, appliance removals, and general landfill cleanup hauling with live cost pricing estimation, PDF slip printing, and email crew dispatch." />
     <link rel="icon" type="image/png" href="/assets/img/logo.png" />
+    <style>
+      /* Ensure the Vite app doesn't generate its own inner scrollbar */
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        overflow-y: hidden;
+        height: auto;
+      }
+    </style>
     <script>
       // Capture and cancel third-party script errors or sandboxed iframe environment security exceptions
       window.addEventListener('error', function(e) {
@@ -33,6 +41,31 @@
   <body class="bg-slate-50 text-slate-900 antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+
+    <script>
+      window.addEventListener('load', function() {
+        const sendHeightToShopify = () => {
+          // Calculate the total height of the app content
+          const currentHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+          
+          // Send it to the parent window (Shopify)
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ height: currentHeight, type: 'rvcc-resize' }, '*');
+          }
+        };
+        
+        // Send the height initially
+        sendHeightToShopify();
+        
+        // Send the height again if the window resizes (critical for rotating mobile devices)
+        window.addEventListener('resize', sendHeightToShopify);
+        
+        // Track DOM changes in case Vite renders components dynamically
+        const observer = new MutationObserver(sendHeightToShopify);
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+      });
+    </script>
   </body>
 </html>
+
 

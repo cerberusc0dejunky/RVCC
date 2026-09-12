@@ -13,15 +13,17 @@ import {
 export const MAX_IMAGE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB Hardcoded Limit (26,214,400 bytes)
 
 const firebaseConfig = {
-  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || "mock-api-key",
-  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || "mock-app.firebaseapp.com",
-  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || "mock-app",
-  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || "mock-app.appspot.com",
-  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
-  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || "1:1234:web:1234"
+  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || "",
+  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || ""
 };
 
-export const isRealFirebase = !!(import.meta as any).env.VITE_FIREBASE_API_KEY && (import.meta as any).env.VITE_FIREBASE_API_KEY !== "mock-api-key";
+export const isRealFirebase = !!(import.meta as any).env.VITE_FIREBASE_API_KEY && 
+  (import.meta as any).env.VITE_FIREBASE_API_KEY.trim() !== "" && 
+  (import.meta as any).env.VITE_FIREBASE_API_KEY !== "mock-api-key";
 
 let app: any = null;
 let db: any = null;
@@ -34,7 +36,7 @@ if (isRealFirebase) {
     auth = getAuth(app);
     console.log("Firebase initialized successfully with real credentials.");
   } catch (e) {
-    console.warn("Firebase initialization failed, falling back to local database & demo auth:", e);
+    console.warn("Firebase initialization failed, falling back to local database:", e);
   }
 }
 
@@ -81,120 +83,19 @@ export interface CustomBidRequest {
   bidSubmittedAt?: string;
 }
 
-// Initial sample custom bids for contractor bidding
-const SAMPLE_CUSTOM_BIDS: CustomBidRequest[] = [
-  {
-    id: "bid-201",
-    bidNumber: "BID-392180",
-    clientName: "David Miller",
-    clientPhone: "(479) 420-9182",
-    clientEmail: "david.miller@fortsmithrealty.com",
-    address: "3412 Free Ferry Rd",
-    zipCode: "72903",
-    description: "Backyard storm debris & heavy fallen oak limbs. Need cut, loaded on trailer and hauled away with rake sweep.",
-    imageUrl: "/assets/img/garage_ba.jpg",
-    imageFileName: "storm_debris.jpg",
-    imageFileSize: "3.2 MB",
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    status: "bid_submitted",
-    bidAmount: 275.00,
-    bidEquipment: "White Dodge Ram + 14ft Tandem Trailer",
-    bidDateEstimate: "Thursday Morning (9:00 AM)",
-    bidNotes: "Can load and haul all limbs in 1 tandem load. Price includes Sebastian County green waste fees and broom sweep.",
-    bidSubmittedAt: new Date(Date.now() - 3600000 * 12).toISOString()
-  },
-  {
-    id: "bid-202",
-    bidNumber: "BID-881944",
-    clientName: "Marcus Vance",
-    clientPhone: "(479) 353-8120",
-    clientEmail: "m.vance@gmail.com",
-    address: "1204 S 21st St",
-    zipCode: "72901",
-    description: "Old dilapidated metal shed tear down in alleyway with rusted tin siding, wood framing, and scrap parts inside.",
-    imageUrl: "/assets/img/houseflip_ba.jpg",
-    imageFileName: "shed_tear_down.jpg",
-    imageFileSize: "4.8 MB",
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-    status: "pending_bid"
-  }
-];
-
-// Initial sample jobs for operator showcase
-const SAMPLE_JOBS: DispatchJob[] = [
-  {
-    id: "job-101",
-    ticketNumber: "TKT-782104",
-    clientName: "David Miller",
-    clientPhone: "(479) 420-9182",
-    clientEmail: "david.miller@fortsmithrealty.com",
-    address: "3412 Free Ferry Rd",
-    zipCode: "72903",
-    selectedDate: new Date().toISOString().split('T')[0],
-    timeSlot: "morning",
-    haulType: "trailer",
-    status: "on_site",
-    priceTotal: 385.00,
-    paymentTerms: "stripe",
-    paymentStatus: "paid",
-    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-    notes: "Estate liquidation. 14ft tandem trailer parked in wide driveway. 2 mattresses and 4 contractor bags loaded.",
-    items: { mattress: 2, couch: 1, yard_bag: 4 },
-    specialNotes: "Side gate code is #4412. Watch out for flower beds."
-  },
-  {
-    id: "job-102",
-    ticketNumber: "TKT-551930",
-    clientName: "Sarah Jenkins",
-    clientPhone: "(479) 785-3341",
-    clientEmail: "sarah.j@rivervalleyliving.com",
-    address: "810 Towson Ave",
-    zipCode: "72901",
-    selectedDate: new Date().toISOString().split('T')[0],
-    timeSlot: "afternoon",
-    haulType: "truck",
-    status: "dispatched",
-    priceTotal: 185.00,
-    paymentTerms: "arrival",
-    paymentStatus: "pending",
-    timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-    notes: "Curbside bulky furniture pickup. Heavy oak dresser and box spring.",
-    items: { couch: 1, yard_bag: 2 }
-  },
-  {
-    id: "job-103",
-    ticketNumber: "TKT-992014",
-    clientName: "Commercial River Storage",
-    clientPhone: "(479) 222-8874",
-    clientEmail: "storageops@rivervalleystorage.net",
-    address: "5200 S 74th St",
-    zipCode: "72903",
-    selectedDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-    timeSlot: "morning",
-    haulType: "trailer",
-    status: "scheduled",
-    priceTotal: 620.00,
-    paymentTerms: "stripe",
-    paymentStatus: "paid",
-    timestamp: new Date().toISOString(),
-    notes: "2 defaulted commercial units (Units 104 and 106). Full sweep-out required for same-day re-rental.",
-    items: { mattress: 3, couch: 2, yard_bag: 6 }
-  }
-];
-
-// Simple local fallback database using localStorage
+// Local storage persistence helper for offline or standalone operation
 const localDb = {
   getDocs(colName: string): any[] {
     const existing = localStorage.getItem(colName);
     if (!existing) {
-      const initialData = colName === 'custom_bids' ? SAMPLE_CUSTOM_BIDS : SAMPLE_JOBS;
-      localStorage.setItem(colName, JSON.stringify(initialData));
-      return initialData;
+      localStorage.setItem(colName, JSON.stringify([]));
+      return [];
     }
     try {
-      return JSON.parse(existing);
+      const parsed = JSON.parse(existing);
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return colName === 'custom_bids' ? SAMPLE_CUSTOM_BIDS : SAMPLE_JOBS;
+      return [];
     }
   },
   addDoc(colName: string, data: any): any {
@@ -381,37 +282,28 @@ export function setStoredAuthUser(user: AuthUser | null): void {
 }
 
 export async function signInWithGoogleAuth(): Promise<AuthUserProfile> {
-  let profile: AuthUserProfile;
   if (auth && isRealFirebase) {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
-      profile = {
+      const userEmail = (user.email || "").toLowerCase();
+      const profile: AuthUserProfile = {
         uid: user.uid,
         displayName: user.displayName || "Google User",
         email: user.email || "",
         photoURL: user.photoURL || undefined,
         provider: 'google',
-        role: user.email?.includes('rivervalley') || user.email?.includes('admin') ? 'operator' : 'customer'
+        role: userEmail.includes('c0dejunky.com') || userEmail.includes('admin') || userEmail.includes('rivervalley') ? 'operator' : 'customer'
       };
       setStoredAuthUser(profile);
       return profile;
     } catch (e: any) {
-      console.warn("Google Sign-In with real Firebase failed/cancelled, using simulated profile:", e);
+      console.error("Google Sign-In with Firebase encountered an error:", e);
+      throw e;
     }
   }
-  // Seamless client-side demo fallback
-  profile = {
-    uid: "google-demo-" + Date.now(),
-    displayName: "Travis Wayne (Google)",
-    email: "travis.wayne@rivervalleycrew.com",
-    photoURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120&h=120",
-    provider: 'google',
-    role: 'operator'
-  };
-  setStoredAuthUser(profile);
-  return profile;
+  throw new Error("Google Authentication is not configured. Please supply VITE_FIREBASE_API_KEY.");
 }
 
 
