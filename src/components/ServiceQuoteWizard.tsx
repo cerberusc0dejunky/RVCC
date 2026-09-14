@@ -146,7 +146,7 @@ export default function ServiceQuoteWizard() {
 
   const estimatedMinutes = useMemo(() => {
     if (loadType === "appliance") return 0;
-    const base = 45;
+    const base = 20;
     const distanceMinutes = distanceMiles ? Math.max(0, distanceMiles / 20) * 15 : 0;
     const loadMinutes = loadType === "truck" ? 20 : loadType === "trailer" ? 30 : 15;
     const itemMinutes = loadType === "trailer" ? selectedTrailerItems.length * 8 : 0;

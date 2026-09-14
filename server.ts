@@ -354,7 +354,7 @@ Return ONLY a valid JSON object matching the requested schema.`;
   app.post("/api/create-checkout-session", async (req, res) => {
     try {
       const { hours, estimatedLaborHours, total } = req.body;
-      const quantity = Math.max(1, Math.round(Number(hours || estimatedLaborHours || (total ? Math.max(1, Math.round(total / 75)) : 2))));
+      const quantity = Math.max(1, Math.round(Number(hours || estimatedLaborHours || (total ? Math.max(1, Math.round(total / 75)) : 1))));
 
       const shopifyEndpoint = "https://c0dejunky.com/api/2024-01/graphql.json";
       const storefrontAccessToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "";

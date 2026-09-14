@@ -216,7 +216,7 @@ export default function App() {
   const [aiError, setAiError] = useState<string>('');
 
   // Labor states
-  const [laborHours, setLaborHours] = useState<number>(2);
+  const [laborHours, setLaborHours] = useState<number>(1);
 
   // Material & load extras (Slide 3) â€” all priced silently in background
   const [yardWasteExtra, setYardWasteExtra] = useState<boolean>(false);
@@ -568,7 +568,7 @@ export default function App() {
   useEffect(() => {
     if (!aiAnalysisResult) {
       if (haulType === 'truck') {
-        setLaborHours(2); // Flat 2 hours for standard truck load
+        setLaborHours(1); // Flat 1 hour bare minimum for standard truck load when nothing is entered
       } else if (haulType === 'trailer') {
         const items = Object.entries(itemQuantities)
           .flatMap(([id, qty]) => Array(Math.max(0, qty)).fill(id));
@@ -576,7 +576,7 @@ export default function App() {
           const sim = simulateTruckPack(items);
           setLaborHours(sim.estimatedLaborHours);
         } else {
-          setLaborHours(2);
+          setLaborHours(1);
         }
       } else if (haulType === 'appliance') {
         setLaborHours(0); // Free appliance pickup is a quick stop
@@ -601,7 +601,7 @@ export default function App() {
           body: JSON.stringify({
             items: haulType === 'truck' ? 'Standard Truck Load flat' : 'Trailer items selection',
             total: pricing.total,
-            hours: laborHours || aiAnalysisResult?.estimatedLaborHours || 2,
+            hours: laborHours || aiAnalysisResult?.estimatedLaborHours || 1,
             contactEmail: contactEmail || 'rvcc@c0dejunky.com'
           })
         });
@@ -616,11 +616,11 @@ export default function App() {
       if (targetUrl) {
         window.location.href = targetUrl;
       } else {
-        const hours = Math.max(1, laborHours || aiAnalysisResult?.estimatedLaborHours || 2);
+        const hours = Math.max(1, laborHours || aiAnalysisResult?.estimatedLaborHours || 1);
         window.location.href = `https://c0dejunky.com/cart/46871135060165:${hours}`;
       }
     } catch {
-      const hours = Math.max(1, laborHours || aiAnalysisResult?.estimatedLaborHours || 2);
+      const hours = Math.max(1, laborHours || aiAnalysisResult?.estimatedLaborHours || 1);
       window.location.href = `https://c0dejunky.com/cart/46871135060165:${hours}`;
     }
   };
@@ -670,6 +670,96 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+
+      {/* Top Header Bar */}
+      <header className="bg-[#141414] border-b-4 border-[#ff6600] text-white px-4 sm:px-8 py-3.5 shadow-md sticky top-0 z-30 no-print">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          
+          {/* Brand Logo & Name */}
+          <div 
+            className="flex items-center space-x-3 cursor-pointer" 
+            onClick={() => setActiveView('estimator')}
+          >
+            <div className="w-10 h-10 rounded-full border-2 border-[#ff6600] overflow-hidden bg-black/60 flex items-center justify-center p-0.5 shrink-0 shadow-md">
+              <img 
+                src={logoImg} 
+                alt="River Valley Cleanup Crew" 
+                className="w-full h-full object-cover rounded-full" 
+              />
+            </div>
+            <div>
+              <span className="text-base sm:text-lg font-black uppercase tracking-tight text-white font-display">
+                River Valley <span className="text-[#ff6600]">Cleanup</span> Crew
+              </span>
+              <p className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-wider">
+                Fort Smith, AR • Dispatched Hauling
+              </p>
+            </div>
+          </div>
+
+          {/* Header Navigation & Action Triggers */}
+          <div className="flex items-center flex-wrap gap-2 text-xs font-mono font-bold">
+            
+            {/* Dispatch Hotline Call Button */}
+            <a 
+              href="tel:4792221311"
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition-all"
+            >
+              <Phone className="w-3.5 h-3.5 text-[#ff6600]" />
+              <span>(479) 222-1311</span>
+            </a>
+
+            {/* "What We Do" Slideshow Modal Button */}
+            <button
+              type="button"
+              onClick={() => setShowWhatWeDoModal(true)}
+              className="px-3 py-1.5 bg-[#ff6600] hover:bg-orange-600 text-slate-950 font-black uppercase text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Sparkles className="w-3.5 h-3.5 fill-current" />
+              <span>What We Do</span>
+            </button>
+
+            {/* Live Job Tracker Link */}
+            <button
+              type="button"
+              onClick={() => setActiveView('customer_tracker')}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <SearchCheck className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Track Job</span>
+            </button>
+
+            {/* Customer Account (Shopify Official Account Portal) */}
+            <a
+              href="https://shopify.com/80498655429/account"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <User className="w-3.5 h-3.5 text-amber-400" />
+              <span>Account</span>
+            </a>
+
+            {/* Internal Crew Operator Portal */}
+            <button
+              type="button"
+              onClick={() => {
+                if (currentUser?.role === 'operator') {
+                  setActiveView('operator_dashboard');
+                } else {
+                  setAuthModalInitialRole('operator');
+                  setAuthModalOpen(true);
+                }
+              }}
+              className="px-3 py-1.5 bg-zinc-900 hover:bg-black text-amber-400 border border-amber-500/40 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Operator</span>
+            </button>
+
+          </div>
+        </div>
+      </header>
 
       {/* View 1: Operator Dispatch Dashboard */}
       {activeView === 'operator_dashboard' && currentUser?.role === 'operator' && (
@@ -867,86 +957,70 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                             Choose broken appliance pickup (FREE) or select a heavy-duty truck or trailer load.
                           </p>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {/* Option 1: Truck Load */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setHaulType('truck');
-                              setValidationErrors(prev => ({ ...prev, haulType: '' }));
-                            }}
-                            className={`p-3 rounded-xl border-2 text-left transition-all relative flex flex-col justify-between group cursor-pointer ${
-                              haulType === 'truck'
-                                ? 'border-[#ff6600] bg-orange-50/30 shadow-[0px_4px_16px_rgba(255,102,0,0.18)] ring-2 ring-[#ff6600]/30'
-                                : 'border-[#1a1a1a] hover:border-slate-400 bg-white hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="w-full h-32 rounded-lg overflow-hidden mb-2.5 relative bg-slate-900 border border-slate-200">
-                              <img 
-                                src={truckLoadImg} 
-                                alt="Truck Load" 
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                              <div className="absolute top-2 left-2 bg-[#1a1a1a]/90 text-[#ff6600] px-2 py-0.5 rounded text-[10px] font-mono font-black uppercase flex items-center gap-1.5 backdrop-blur-xs">
-                                <Truck className="w-3.5 h-3.5" />
-                                <span>Truck Load</span>
+                          <div className="flex flex-col gap-1.5">
+                            <h4 className="text-xs sm:text-sm font-black uppercase text-slate-900 font-display tracking-wide text-center">
+                              TRUCK LOAD
+                            </h4>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setHaulType('truck');
+                                setValidationErrors(prev => ({ ...prev, haulType: '' }));
+                              }}
+                              className={`p-2 rounded-xl border-2 transition-all relative flex flex-col justify-between group cursor-pointer ${
+                                haulType === 'truck'
+                                  ? 'border-[#ff6600] bg-orange-50/30 shadow-[0px_4px_16px_rgba(255,102,0,0.18)] ring-2 ring-[#ff6600]/30'
+                                  : 'border-[#1a1a1a] hover:border-slate-400 bg-white hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="w-full h-40 sm:h-48 rounded-lg overflow-hidden relative bg-slate-900 border border-slate-200">
+                                <img 
+                                  src={truckLoadImg} 
+                                  alt="Truck Load" 
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                                {haulType === 'truck' && (
+                                  <span className="absolute top-2 right-2 bg-[#ff6600] text-white rounded-full p-1 shadow-md">
+                                    <Check className="w-4 h-4 stroke-[3]" />
+                                  </span>
+                                )}
                               </div>
-                              {haulType === 'truck' && (
-                                <span className="absolute top-2 right-2 bg-[#ff6600] text-white rounded-full p-1 shadow-md">
-                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                </span>
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center justify-between">
-                                <span className="block font-black text-slate-900 uppercase text-xs sm:text-sm font-display tracking-tight">Heavy-Duty Truck Load</span>
-                                <span className="text-[11px] font-black text-[#ff6600] font-mono bg-orange-100 px-1.5 py-0.5 rounded">$12.47 Dump Fee</span>
-                              </div>
-                              <span className="block text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">
-                                Standard 6.5-ft pickup bed (holds up to ~7.5 cu yds packed tight to cab height). Fits 1â€“2 mattresses upright on rails, dressers, couches, boxes, yard bags, or garage debris with a flat <strong className="text-slate-900 font-bold">$12.47</strong> Fort Smith landfill fee.
-                              </span>
-                            </div>
-                          </button>
+                            </button>
+                          </div>
 
                           {/* Option 2: Trailer Load */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setHaulType('trailer');
-                              setValidationErrors(prev => ({ ...prev, haulType: '' }));
-                            }}
-                            className={`p-3 rounded-xl border-2 text-left transition-all relative flex flex-col justify-between group cursor-pointer ${
-                              haulType === 'trailer'
-                                ? 'border-[#ff6600] bg-orange-50/30 shadow-[0px_4px_16px_rgba(255,102,0,0.18)] ring-2 ring-[#ff6600]/30'
-                                : 'border-[#1a1a1a] hover:border-slate-400 bg-white hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="w-full h-32 rounded-lg overflow-hidden mb-2.5 relative bg-slate-900 border border-slate-200">
-                              <img 
-                                src={trailerLoadImg} 
-                                alt="Trailer Load" 
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                              <div className="absolute top-2 left-2 bg-[#1a1a1a]/90 text-[#ff6600] px-2 py-0.5 rounded text-[10px] font-mono font-black uppercase flex items-center gap-1.5 backdrop-blur-xs">
-                                <FileText className="w-3.5 h-3.5" />
-                                <span>Trailer Load</span>
+                          <div className="flex flex-col gap-1.5">
+                            <h4 className="text-xs sm:text-sm font-black uppercase text-slate-900 font-display tracking-wide text-center">
+                              TRAILER LOAD
+                            </h4>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setHaulType('trailer');
+                                setValidationErrors(prev => ({ ...prev, haulType: '' }));
+                              }}
+                              className={`p-2 rounded-xl border-2 transition-all relative flex flex-col justify-between group cursor-pointer ${
+                                haulType === 'trailer'
+                                  ? 'border-[#ff6600] bg-orange-50/30 shadow-[0px_4px_16px_rgba(255,102,0,0.18)] ring-2 ring-[#ff6600]/30'
+                                  : 'border-[#1a1a1a] hover:border-slate-400 bg-white hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="w-full h-40 sm:h-48 rounded-lg overflow-hidden relative bg-slate-900 border border-slate-200">
+                                <img 
+                                  src={trailerLoadImg} 
+                                  alt="Trailer Load" 
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                                {haulType === 'trailer' && (
+                                  <span className="absolute top-2 right-2 bg-[#ff6600] text-white rounded-full p-1 shadow-md">
+                                    <Check className="w-4 h-4 stroke-[3]" />
+                                  </span>
+                                )}
                               </div>
-                              {haulType === 'trailer' && (
-                                <span className="absolute top-2 right-2 bg-[#ff6600] text-white rounded-full p-1 shadow-md">
-                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                </span>
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center justify-between">
-                                <span className="block font-black text-slate-900 uppercase text-xs sm:text-sm font-display tracking-tight">Trailer Load (Tandem Rig)</span>
-                                <span className="text-[11px] font-black text-slate-700 font-mono bg-slate-100 px-1.5 py-0.5 rounded">Itemized Sum</span>
-                              </div>
-                              <span className="block text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">
-                                14-foot tandem dump trailer. Disposal calculated by item volume. Zero gate flat surcharges.
-                              </span>
-                            </div>
-                          </button>
+                            </button>
+                          </div>
                         </div>
 
                         {/* AI Assistance Button for Unsure Customers */}

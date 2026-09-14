@@ -400,6 +400,8 @@ export function simulateTruckPack(
       overflowItems: [],
       physicsNotes: ["Quick minimal stop."],
       safetyFlags: [],
+      prohibitedItemsDetected: [],
+      hasProhibitedItems: false,
       confidenceScore: 0.96,
       briefAnalysis: "Minimal debris volume detected (1 hr minimum load).",
       suggestedDescription: "Quick curbside cleanup."

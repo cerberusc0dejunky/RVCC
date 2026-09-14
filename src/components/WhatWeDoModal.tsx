@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  X, 
-  ChevronLeft, 
-  ChevronRight, 
-  Play, 
-  Pause, 
-  CheckCircle2, 
-  Truck, 
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Play,
+  Pause,
+  CheckCircle2,
+  Truck,
   Maximize2,
   Calendar,
   ArrowRight
 } from 'lucide-react';
 
-const bedroomBaImg = '/assets/img/bedroom_ba.png';
-const storageUnitImg = '/assets/img/storageunit_ba.png';
-const houseFlipBaImg = '/assets/img/houseflip_ba.jpg';
-const garageBaImg = '/assets/img/garage_ba.jpg';
+const bedroomBaImg = '/assets/img/banners/bedroom_ba.jpg';
+const storageUnitImg = '/assets/img/banners/storageunit_ba.png';
+const houseFlipBaImg = '/assets/img/banners/houseflip_ba.jpg';
+const garageBaImg = '/assets/img/banners/garage_ba.jpg';
 
 export interface BeforeAfterSlide {
   id: string;
@@ -174,19 +174,19 @@ export const WhatWeDoModal: React.FC<WhatWeDoModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentImageSrc = imgErrorMap[currentSlide.id] && currentSlide.fallbackUrl 
-    ? currentSlide.fallbackUrl 
+  const currentImageSrc = imgErrorMap[currentSlide.id] && currentSlide.fallbackUrl
+    ? currentSlide.fallbackUrl
     : currentSlide.imageUrl;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
-      <div 
+      <div
         className="bg-[#1e1e1e] text-white w-full max-w-5xl max-h-[92vh] rounded-xl border-2 border-[#ff6600] shadow-[0_0_40px_rgba(255,102,0,0.35)] flex flex-col overflow-hidden relative"
         onClick={(e) => e.stopPropagation()}
       >
@@ -216,11 +216,10 @@ export const WhatWeDoModal: React.FC<WhatWeDoModalProps> = ({
             <button
               type="button"
               onClick={() => setIsPlaying(!isPlaying)}
-              className={`px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center space-x-1.5 transition-colors border cursor-pointer ${
-                isPlaying 
-                  ? 'bg-[#ff6600] text-black border-[#ff6600]' 
+              className={`px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center space-x-1.5 transition-colors border cursor-pointer ${isPlaying
+                  ? 'bg-[#ff6600] text-black border-[#ff6600]'
                   : 'bg-[#2a2a2a] text-slate-300 border-slate-700 hover:bg-[#333]'
-              }`}
+                }`}
               title={isPlaying ? 'Pause slideshow' : 'Auto-play slideshow'}
             >
               {isPlaying ? (
@@ -253,8 +252,8 @@ export const WhatWeDoModal: React.FC<WhatWeDoModalProps> = ({
           {/* Main Visual Display */}
           <div className="relative bg-black w-full min-h-[260px] sm:min-h-[380px] md:min-h-[440px] flex items-center justify-center overflow-hidden group">
             {/* The Image */}
-            <img 
-              src={currentImageSrc} 
+            <img
+              src={currentImageSrc}
               alt={currentSlide.title}
               onError={() => {
                 if (!imgErrorMap[currentSlide.id]) {
@@ -303,7 +302,7 @@ export const WhatWeDoModal: React.FC<WhatWeDoModalProps> = ({
             {/* Auto-play progress bar */}
             {isPlaying && (
               <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
-                <div 
+                <div
                   key={currentIndex}
                   className="h-full bg-[#ff6600] animate-[shimmer_4.5s_linear]"
                   style={{
@@ -375,8 +374,8 @@ export const WhatWeDoModal: React.FC<WhatWeDoModalProps> = ({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {SLIDES_DATA.map((slide, idx) => {
                   const isSelected = idx === currentIndex;
-                  const thumbSrc = imgErrorMap[slide.id] && slide.fallbackUrl 
-                    ? slide.fallbackUrl 
+                  const thumbSrc = imgErrorMap[slide.id] && slide.fallbackUrl
+                    ? slide.fallbackUrl
                     : slide.imageUrl;
 
                   return (
@@ -384,16 +383,15 @@ export const WhatWeDoModal: React.FC<WhatWeDoModalProps> = ({
                       key={slide.id}
                       type="button"
                       onClick={() => setCurrentIndex(idx)}
-                      className={`group text-left p-1.5 rounded-lg border-2 transition-all cursor-pointer flex flex-col gap-1.5 ${
-                        isSelected 
-                          ? 'border-[#ff6600] bg-[#2a2a2a] shadow-[0_0_12px_rgba(255,102,0,0.3)]' 
+                      className={`group text-left p-1.5 rounded-lg border-2 transition-all cursor-pointer flex flex-col gap-1.5 ${isSelected
+                          ? 'border-[#ff6600] bg-[#2a2a2a] shadow-[0_0_12px_rgba(255,102,0,0.3)]'
                           : 'border-slate-700/80 bg-[#181818] hover:border-slate-500'
-                      }`}
+                        }`}
                     >
                       <div className="relative aspect-video w-full rounded overflow-hidden bg-black">
-                        <img 
-                          src={thumbSrc} 
-                          alt={slide.title} 
+                        <img
+                          src={thumbSrc}
+                          alt={slide.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                           referrerPolicy="no-referrer"
                         />

@@ -8,17 +8,30 @@ coverage/
 !.env.example
 *.zip
 
-# NotebookLM compilation & compilation scripts
+# AI Documentation Ingestion Exports
 .notebooklm/
 .NotebookLM/
+*_PROJECT_TREE.md
+*_FUNCTION_HIERARCHY.md
+*_ALL_SCRIPTS*.md
+SOURCE_*.md
+PROJECT_TREE.md
+FUNCTION_HIERARCHY.md
+ALL_SCRIPTS*.md
+
+# Agent & Spec Temp Files
+*.xml
+shopify-iframe-embed.html
+test-benchmarks.js
+worker.js
+
+# Python caches & utilities
 compile_notebooklm.py
 scode.py
-
-# Python caches
 __pycache__/
 *.py[cod]
 
-# Internal tracking & agent instructions
+# Internal tracking
 tokenusage.md
-ide-agent-refactoring-instructions.xml
 
+.developer/
