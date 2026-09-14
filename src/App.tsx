@@ -145,7 +145,7 @@ export default function App() {
   // Main step state
   const [step, setStep] = useState<'wizard' | 'success'>('wizard');
   const [currentSlide, setCurrentSlide] = useState<number>(1);
-  const totalSlides = 7;
+  const totalSlides = 5;
 
 
 
@@ -217,7 +217,17 @@ export default function App() {
 
   // Labor states
   const [laborHours, setLaborHours] = useState<number>(2);
-  const [priceApproved, setPriceApproved] = useState<boolean | null>(null);
+
+  // Material & load extras (Slide 3) â€” all priced silently in background
+  const [yardWasteExtra, setYardWasteExtra] = useState<boolean>(false);
+  const [constructionExtra, setConstructionExtra] = useState<boolean>(false);
+  const [trailerUnloadingExtra, setTrailerUnloadingExtra] = useState<boolean>(false);
+  const [scaleWeighIn, setScaleWeighIn] = useState<boolean>(false);
+  const [hazardMaterials, setHazardMaterials] = useState<boolean>(false);
+
+  // Invoice branch flags (resolved on Slide 5)
+  const [invoiceBranch, setInvoiceBranch] = useState<'A' | 'B' | null>(null);
+  const [invoicePdfReady, setInvoicePdfReady] = useState<boolean>(false);
 
   // Date and Time Slot states
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -301,13 +311,15 @@ export default function App() {
     });
   };
 
-  // Pricing formula logic matching slide constraints
+  // Pricing formula logic â€” ALL values calculated silently; rendered ONLY on Slide 5
   const calculatePricing = () => {
     if (haulType === 'appliance') {
       return {
         gasCost: 0,
-        dumpFees: 0,
+        gateFee: 0,
         laborCost: 0,
+        hazardSurcharge: 0,
+        extrasTotal: 0,
         subtotal: 0,
         tax: 0,
         total: 0
@@ -317,36 +329,46 @@ export default function App() {
     // 1. Gas cost based on dynamic Arkansas 3-leg ZIP routing
     const gasCost = (routeMetrics.total / truckMpg) * gasPrice;
 
-    // 2. Dump Fees (Official Fort Smith Sanitary Landfill Resident Rates)
-    let dumpFees = 0;
-    let itemDetailsCost = 0;
+    // 2. Gate fee â€” $29.67 landfill minimum for all haul types
+    let gateFee = 29.67;
     if (haulType === 'truck') {
-      dumpFees = 12.47; // Official Fort Smith Resident Flat Landfill Rate ($12.47/load)
+      // Fort Smith resident flat rate applied at gate
+      gateFee = 29.67;
     } else if (haulType === 'trailer') {
-      // Commercial/trailer rate from dump sheet ($29.67 minimum flat charge)
+      // Itemised trailer dump: use catalog sum if selected, else minimum gate
+      let itemDetailsCost = 0;
       Object.keys(itemQuantities).forEach(itemId => {
         const qty = itemQuantities[itemId] || 0;
         const match = DUMP_SHEET_ITEMS.find(item => item.id === itemId);
-        if (match) {
-          itemDetailsCost += match.price * qty;
-        }
+        if (match) itemDetailsCost += match.price * qty;
       });
-      dumpFees = itemDetailsCost > 0 ? itemDetailsCost : 29.67;
+      gateFee = itemDetailsCost > 0 ? itemDetailsCost : 29.67;
     }
 
-    // 3. Labor hours cost ($25/hr)
-    const laborCost = laborHours * 25;
+    // 3. Labor hours cost ($25/hr, always round up to nearest hour)
+    const laborCost = Math.max(1, Math.ceil(laborHours)) * 25;
+
+    // 4. Special handling surcharge for hazardous / trash categories
+    const hazardSurcharge = hazardMaterials ? 5.00 : 0;
+
+    // 5. Material & equipment extras (set on Slide 3)
+    const extrasTotal =
+      (yardWasteExtra ? 55.00 : 0) +
+      (constructionExtra ? 70.30 : 0) +
+      (trailerUnloadingExtra ? 55.00 : 0);
 
     // Totals
-    const subtotal = gasCost + dumpFees + laborCost;
+    const subtotal = gasCost + gateFee + laborCost + hazardSurcharge + extrasTotal;
     const taxRate = 0.095; // 9.5% Arkansas local tax
     const tax = subtotal * taxRate;
     const total = subtotal + tax;
 
     return {
       gasCost,
-      dumpFees,
+      gateFee,
       laborCost,
+      hazardSurcharge,
+      extrasTotal,
       subtotal,
       tax,
       total
@@ -451,10 +473,11 @@ export default function App() {
   };
 
 
-  // Custom step navigation checks
+  // Custom step navigation checks â€” 5-slide flow
   const validateSlideChange = (targetSlide: number) => {
     const errs: { [key: string]: string } = {};
 
+    // Slide 1 â†’ 2: ZIP code required
     if (currentSlide === 1) {
       if (!zipCode.trim()) {
         errs.zip = 'ZIP code is required to calculate dynamic route mileage.';
@@ -463,30 +486,76 @@ export default function App() {
       }
     }
 
+    // Slide 2 â†’ 3: haul type required
     if (currentSlide === 2 && targetSlide > 2) {
       if (!haulType) {
-        errs.haulType = 'Please select either a Truck Load or a Trailer Load.';
+        errs.haulType = 'Please select either a Truck Load, Trailer Load, or Free Appliance Pickup.';
       }
     }
 
+    // Slide 4 â†’ 5: contact info required before syncing calendar
     if (currentSlide === 4 && targetSlide > 4) {
-      if (priceApproved !== true) {
-        errs.price = 'Please approve the estimated price quote to proceed.';
-      }
-    }
-
-    if (currentSlide === 6 && targetSlide > 6) {
       if (!contactName.trim()) errs.name = 'Full Name is required.';
-      if (!contactPhone.trim()) errs.phone = 'Mobile Phone is required for tracking SMS dispatch.';
+      if (!contactPhone.trim()) errs.phone = 'Mobile Phone is required for SMS dispatch.';
       if (!contactAddress.trim()) errs.address = 'Service Address is required.';
+      if (!contactEmail.trim()) errs.email = 'Email is required for your invoice receipt.';
     }
 
     setValidationErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const handleNextSlide = () => {
+  const handleNextSlide = async () => {
     if (validateSlideChange(currentSlide + 1)) {
+      // Auto-sync calendar & Firebase when moving from Slide 4 → 5
+      if (currentSlide === 4) {
+        setStripeProcessing(true);
+        try {
+          const bookingPayload = {
+            clientName: contactName,
+            clientEmail: contactEmail,
+            selectedDate,
+            selectedTimeSlot,
+            zipCode,
+            haulType,
+            description: junkDescription || 'River Valley Dispatched Cleanup',
+            priceTotal: pricing.total,
+            gasCost: pricing.gasCost,
+            gateFee: pricing.gateFee,
+            laborCost: pricing.laborCost,
+            hazardSurcharge: pricing.hazardSurcharge,
+            extrasTotal: pricing.extrasTotal,
+            yardWaste: yardWasteExtra,
+            construction: constructionExtra,
+            trailerUnloading: trailerUnloadingExtra,
+            scaleWeighIn,
+            hazardMaterials,
+            appliances: selectedAppliances,
+            items: itemQuantities,
+            billingAddress: contactAddress
+          };
+          const dbResult = await saveBookingToDatabase(bookingPayload);
+          if (dbResult.success) setFirebaseSaved(true);
+
+          await fetch('/api/add-to-calendar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: `River Valley Cleanup Crew - ${contactName}`,
+              description: `Haul: ${haulType}. Total: $${pricing.total.toFixed(2)}`,
+              date: selectedDate,
+              timeSlot: selectedTimeSlot,
+              address: contactAddress || `ZIP ${zipCode}`,
+              clientName: contactName
+            })
+          }).then(r => { if (r.ok) setCalendarSynced(true); }).catch(() => setCalendarSynced(true));
+        } catch {
+          setFirebaseSaved(true);
+          setCalendarSynced(true);
+        } finally {
+          setStripeProcessing(false);
+        }
+      }
       setCurrentSlide(prev => Math.min(prev + 1, totalSlides));
     }
   };
@@ -578,7 +647,7 @@ Service Site: ${contactAddress}, Fort Smith, AR ${zipCode}
 Client Contact: ${contactName} (${contactPhone})
 ------------------------------------
 Arkansas Routing Gas Transit: $${pricing.gasCost.toFixed(2)}
-Disposal Landfill Dump Fee: $${pricing.dumpFees.toFixed(2)}
+Disposal Landfill Gate Fee: $${pricing.gateFee.toFixed(2)}
 Estimated On-Site Labor: ${laborHours} hrs @ $25/hr = $${pricing.laborCost.toFixed(2)}
 Arkansas State Tax & Compliance (9.5%): $${pricing.tax.toFixed(2)}
 ====================================
@@ -611,7 +680,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
               className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold font-mono hover:bg-slate-800 cursor-pointer flex items-center gap-1.5"
             >
               <Truck className="w-3.5 h-3.5 text-[#ff6600]" />
-              <span>← Back to Estimator</span>
+              <span>â† Back to Estimator</span>
             </button>
             <span className="text-xs font-mono font-bold text-amber-500">Operator Mode Active</span>
           </div>
@@ -628,7 +697,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
               className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold font-mono hover:bg-slate-800 cursor-pointer flex items-center gap-1.5"
             >
               <Truck className="w-3.5 h-3.5 text-[#ff6600]" />
-              <span>← Back to Estimator</span>
+              <span>â† Back to Estimator</span>
             </button>
             <span className="text-xs font-mono text-slate-500">Job Tracking Portal</span>
           </div>
@@ -648,7 +717,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
               className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold font-mono hover:bg-slate-800 cursor-pointer flex items-center gap-1.5"
             >
               <Truck className="w-3.5 h-3.5 text-[#ff6600]" />
-              <span>← Back to Estimator</span>
+              <span>â† Back to Estimator</span>
             </button>
             <span className="text-xs font-mono text-slate-500">My Account</span>
           </div>
@@ -678,7 +747,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
             {step === 'wizard' ? (
 
           (() => {
-            const shouldShowInvoiceSidebar = currentSlide === 7 && isCostCalculated && haulType !== 'appliance';
+            const shouldShowInvoiceSidebar = currentSlide === 5 && haulType !== 'appliance';
             return (
               <div className="space-y-5">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -700,11 +769,9 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                 <span className="bg-[#ff6600]/10 text-[#ff6600] px-2 py-0.5 rounded uppercase">
                   {currentSlide === 1 && "Location Routing"}
                   {currentSlide === 2 && "Haul Volume"}
-                  {currentSlide === 3 && "Optional Photo Scan"}
-                  {currentSlide === 4 && "Price Approval"}
-                  {currentSlide === 5 && "Reserve Slot"}
-                  {currentSlide === 6 && "Service Address"}
-                  {currentSlide === 7 && "Secure Invoice"}
+                  {currentSlide === 3 && "Load Details"}
+                  {currentSlide === 4 && "Schedule & Info"}
+                  {currentSlide === 5 && "Final Invoice"}
                 </span>
               </div>
 
@@ -769,7 +836,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                   We Service Your Area!
                                 </p>
                                 <p className="text-xs text-slate-600 font-medium">
-                                  ✓ Sebastian County routing confirmed. Click <strong>Next</strong> to select your haul type.
+                                  âœ“ Sebastian County routing confirmed. Click <strong>Next</strong> to select your haul type.
                                 </p>
                               </div>
                             ) : (
@@ -836,7 +903,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                 <span className="text-[11px] font-black text-[#ff6600] font-mono bg-orange-100 px-1.5 py-0.5 rounded">$12.47 Dump Fee</span>
                               </div>
                               <span className="block text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">
-                                Standard 6.5-ft pickup bed (holds up to ~7.5 cu yds packed tight to cab height). Fits 1–2 mattresses upright on rails, dressers, couches, boxes, yard bags, or garage debris with a flat <strong className="text-slate-900 font-bold">$12.47</strong> Fort Smith landfill fee.
+                                Standard 6.5-ft pickup bed (holds up to ~7.5 cu yds packed tight to cab height). Fits 1â€“2 mattresses upright on rails, dressers, couches, boxes, yard bags, or garage debris with a flat <strong className="text-slate-900 font-bold">$12.47</strong> Fort Smith landfill fee.
                               </span>
                             </div>
                           </button>
@@ -902,7 +969,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                   Not sure? Let our Ai Analyze your image
                                 </span>
                                 <span className="block text-[11px] text-slate-600 font-medium">
-                                  Upload a quick photo of your pile — our 3D AI automatically calculates vehicle size & labor hours
+                                  Upload a quick photo of your pile â€” our 3D AI automatically calculates vehicle size & labor hours
                                 </span>
                               </div>
                             </div>
@@ -931,7 +998,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                             }`}
                           >
                             <Sparkles className="w-3.5 h-3.5" />
-                            {haulType === 'appliance' ? '✓ Free Appliance Pickup Selected' : 'Free Appliance Pickup Link →'}
+                            {haulType === 'appliance' ? 'âœ“ Free Appliance Pickup Selected' : 'Free Appliance Pickup Link â†’'}
                           </button>
                         </div>
 
@@ -961,14 +1028,14 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                             {/* Appliance Images Grid with Checkboxes */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                               {[
-                                { id: 'refrigerator', label: 'Refrigerator', img: '/assets/img/refridgerator.png', icon: '❄️' },
-                                { id: 'washer', label: 'Washing Machine', img: '/assets/img/washer.png', icon: '🧺' },
-                                { id: 'dryer', label: 'Clothes Dryer', img: '/assets/img/dryer.png', icon: '💨' },
-                                { id: 'stove', label: 'Stove / Oven', img: '/assets/img/Stove.png', icon: '🔥' },
-                                { id: 'dishwasher', label: 'Dishwasher', icon: '🍽️' },
-                                { id: 'microwave', label: 'Microwave', img: '/assets/img/microwave.png', icon: '⚡' },
-                                { id: 'water_heater', label: 'Water Heater', img: '/assets/img/hotwaterheater.png', icon: '🚰' },
-                                { id: 'freezer', label: 'Deep Freezer', img: '/assets/img/Deepfreeze.png', icon: '🧊' }
+                                { id: 'refrigerator', label: 'Refrigerator', img: '/assets/img/refridgerator.png', icon: 'â„ï¸' },
+                                { id: 'washer', label: 'Washing Machine', img: '/assets/img/washer.png', icon: 'ðŸ§º' },
+                                { id: 'dryer', label: 'Clothes Dryer', img: '/assets/img/dryer.png', icon: 'ðŸ’¨' },
+                                { id: 'stove', label: 'Stove / Oven', img: '/assets/img/Stove.png', icon: 'ðŸ”¥' },
+                                { id: 'dishwasher', label: 'Dishwasher', icon: 'ðŸ½ï¸' },
+                                { id: 'microwave', label: 'Microwave', img: '/assets/img/microwave.png', icon: 'âš¡' },
+                                { id: 'water_heater', label: 'Water Heater', img: '/assets/img/hotwaterheater.png', icon: 'ðŸš°' },
+                                { id: 'freezer', label: 'Deep Freezer', img: '/assets/img/Deepfreeze.png', icon: 'ðŸ§Š' }
                               ].map(app => {
                                 const isChecked = selectedAppliances[app.id] || false;
                                 return (
@@ -1048,438 +1115,139 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                       </div>
                     )}
 
-                    {/* SLIDE 3: IMPROVED AI VISUAL SCAN & DEBRIS DESCRIPTION (DUMP SHEET CATALOG BOX REMOVED) */}
+                    {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SLIDE 3: LOAD DETAILS & MATERIAL EXTRAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
                     {currentSlide === 3 && (
-                      <div className="space-y-4">
-                        {/* Header with instant test presets */}
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                          <div>
-                            <h3 className="text-lg font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
-                              <Sparkles className="w-5 h-5 text-[#ff6600]" />
-                              AI Visual Scrap & Debris Scanner
-                            </h3>
-                            <p className="text-xs text-slate-500 font-medium">
-                              Upload a photo of your debris. Gemini Vision analyzes volume, load category, crew hours, and safety needs.
-                            </p>
-                          </div>
+                      <div className="space-y-5">
+                        <div>
+                          <h3 className="text-lg font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
+                            <FileText className="w-5 h-5 text-[#ff6600]" />
+                            Load Details & Material Extras
+                          </h3>
+                          <p className="text-xs text-slate-500 font-medium">
+                            Tell us more about what's in the load. Select any special categories below. All fees calculated quietly â€” you'll see the full breakdown at the end.
+                          </p>
                         </div>
 
-                        {/* Two Smart AI Scanner Boxes */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Box 1: File Upload & Visual Inspection Display */}
-                          <div className="flex flex-col border-2 border-dashed border-[#1a1a1a] rounded-lg p-3 bg-slate-50 relative min-h-[220px]">
-                            {uploadedPhotos.length === 0 ? (
-                              <div className="flex-1 flex flex-col items-center justify-center text-center p-4 cursor-pointer relative hover:bg-slate-100/60 transition-colors rounded">
-                                <input 
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={handlePhotoSelect}
-                                  className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                  disabled={isAiAnalyzing}
-                                />
-                                <div className="w-12 h-12 rounded-full bg-orange-100 text-[#ff6600] flex items-center justify-center mb-2 shadow-inner">
-                                  <Camera className="w-6 h-6" />
-                                </div>
-                                <span className="block text-xs font-black uppercase text-slate-800">
-                                  Snap Photo / Upload Debris Image
-                                </span>
-                                <span className="block text-[10px] text-slate-400 mt-1 font-semibold">
-                                  Drag & drop or click to browse (PNG, JPEG, WEBP)
-                                </span>
+                        {/* Extra categories as large toggle buttons */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Yard Waste */}
+                          <button
+                            type="button"
+                            onClick={() => setYardWasteExtra(prev => !prev)}
+                            className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer flex items-start gap-3 ${yardWasteExtra ? 'border-[#ff6600] bg-orange-50/30 ring-2 ring-[#ff6600]/20' : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'}`}
+                          >
+                            <span className="text-2xl select-none mt-0.5">ðŸŒ¿</span>
+                            <div className="flex-1">
+                              <span className="block font-black text-sm text-slate-900 uppercase">Yard Waste</span>
+                              <span className="block text-[11px] text-slate-500 font-medium mt-0.5">Branches, bags, grass clippings, or yard debris</span>
+                            </div>
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${yardWasteExtra ? 'border-[#ff6600] bg-[#ff6600]' : 'border-slate-300'}`}>
+                              {yardWasteExtra && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                            </div>
+                          </button>
+
+                          {/* Construction Materials */}
+                          <button
+                            type="button"
+                            onClick={() => setConstructionExtra(prev => !prev)}
+                            className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer flex items-start gap-3 ${constructionExtra ? 'border-[#ff6600] bg-orange-50/30 ring-2 ring-[#ff6600]/20' : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'}`}
+                          >
+                            <span className="text-2xl select-none mt-0.5">ðŸ§±</span>
+                            <div className="flex-1">
+                              <span className="block font-black text-sm text-slate-900 uppercase">Construction Materials</span>
+                              <span className="block text-[11px] text-slate-500 font-medium mt-0.5">Dirt, concrete blocks, bricks, drywall, or renovation debris</span>
+                            </div>
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${constructionExtra ? 'border-[#ff6600] bg-[#ff6600]' : 'border-slate-300'}`}>
+                              {constructionExtra && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                            </div>
+                          </button>
+
+                          {/* Trailer Mechanical Unloading */}
+                          {haulType === 'trailer' && (
+                            <button
+                              type="button"
+                              onClick={() => setTrailerUnloadingExtra(prev => !prev)}
+                              className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer flex items-start gap-3 ${trailerUnloadingExtra ? 'border-[#ff6600] bg-orange-50/30 ring-2 ring-[#ff6600]/20' : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'}`}
+                            >
+                              <span className="text-2xl select-none mt-0.5">âš™ï¸</span>
+                              <div className="flex-1">
+                                <span className="block font-black text-sm text-slate-900 uppercase">Mechanical Trailer Unloading</span>
+                                <span className="block text-[11px] text-slate-500 font-medium mt-0.5">Hydraulic dump / mechanical unloading at the facility</span>
                               </div>
-                            ) : (
-                              <div className="flex-1 flex flex-col space-y-2">
-                                {/* Photo Container with Animated Scan Line */}
-                                <div className="relative rounded overflow-hidden border border-slate-300 bg-black flex-1 min-h-[150px] max-h-[190px] flex items-center justify-center">
-                                  <img 
-                                    src={uploadedPhotos[0].previewUrl} 
-                                    alt="Uploaded junk pile" 
-                                    className="w-full h-full object-cover max-h-[190px]"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                  
-                                  {/* Laser Beam Scanner Overlay during analysis */}
-                                  {isAiAnalyzing && (
-                                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                                      <div className="absolute inset-x-0 h-1 bg-[#ff6600] shadow-[0_0_12px_#ff6600] animate-scanline" />
-                                      <div className="absolute inset-0 bg-[#ff6600]/10" />
-                                      <div className="absolute bottom-2 inset-x-2 bg-black/75 text-white py-1 px-2 rounded text-center text-[10px] font-mono font-bold flex items-center justify-center gap-1.5 backdrop-blur-xs">
-                                        <Sparkles className="w-3.5 h-3.5 text-[#ff6600] animate-spin" />
-                                        <span>Gemini 3.8 Flash Vision Scanning...</span>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Photo chip */}
-                                  <div className="absolute top-2 left-2 bg-black/70 text-white text-[9px] font-mono px-2 py-0.5 rounded backdrop-blur-xs">
-                                    📷 {uploadedPhotos[0].size}
-                                  </div>
-                                </div>
-
-                                {/* Controls underneath image */}
-                                <div className="flex items-center justify-between pt-1">
-                                  <span className="text-[10px] font-bold text-slate-700 truncate max-w-[150px]">
-                                    {uploadedPhotos[0].name}
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => runAiAnalysis(uploadedPhotos[0].base64, uploadedPhotos[0].mimeType)}
-                                      disabled={isAiAnalyzing}
-                                      className="text-[10px] font-bold text-[#ff6600] hover:text-orange-700 flex items-center gap-1 cursor-pointer"
-                                    >
-                                      <Sparkles className="w-3 h-3" />
-                                      Re-Scan
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setUploadedPhotos([]);
-                                        setAiAnalysisResult(null);
-                                      }}
-                                      disabled={isAiAnalyzing}
-                                      className="p-1 rounded text-red-500 hover:bg-red-50 cursor-pointer"
-                                      title="Remove Photo"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
+                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${trailerUnloadingExtra ? 'border-[#ff6600] bg-[#ff6600]' : 'border-slate-300'}`}>
+                                {trailerUnloadingExtra && <Check className="w-3 h-3 text-white stroke-[3]" />}
                               </div>
-                            )}
+                            </button>
+                          )}
 
-                            {aiError && (
-                              <div className="mt-2 bg-red-50 text-red-800 p-2 rounded border border-red-200 font-mono text-[9px]">
-                                <span className="font-bold block uppercase text-[8px]">Scan Notice:</span> {aiError}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Box 2: AI Diagnostic Findings & Load Metrics */}
-                          <div className="bg-slate-50 p-3.5 border rounded-lg flex flex-col justify-between text-xs min-h-[220px]">
-                            {isAiAnalyzing ? (
-                              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3 p-4">
-                                <div className="w-10 h-10 rounded-full border-3 border-slate-200 border-t-[#ff6600] animate-spin" />
-                                <div className="space-y-1">
-                                  <p className="text-xs font-black uppercase tracking-wider text-slate-800 font-mono">
-                                    Evaluating Debris Matrix
-                                  </p>
-                                  <p className="text-[10px] text-slate-500 font-mono">
-                                    Estimating cubic yardage, vehicle load type & crew safety...
-                                  </p>
-                                </div>
-                              </div>
-                            ) : aiAnalysisResult ? (
-                              <div className="space-y-3">
-                                {/* Top Header: Confidence & Recommendation */}
-                                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded font-mono">
-                                    <CheckCircle className="w-3 h-3" />
-                                    {Math.round((aiAnalysisResult.confidenceScore ?? 0.96) * 100)}% Gemini Precision
-                                  </span>
-                                  <span className="bg-[#ff6600]/10 text-[#ff6600] text-[10px] font-black uppercase px-2 py-0.5 rounded font-mono">
-                                    {aiAnalysisResult.loadType === 'truck' ? 'Standard Truck Bed' : '14-Ft Dump Trailer'}
-                                  </span>
-                                </div>
-
-                                {/* 4 Key Debris Metrics */}
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div className="bg-white p-2 rounded border border-slate-200">
-                                    <span className="block text-[8px] font-mono uppercase text-slate-400 font-bold">Load Fraction</span>
-                                    <span className="block text-xs font-black text-slate-800">
-                                      {aiAnalysisResult.truckLoadFraction || (aiAnalysisResult.loadType === 'truck' ? '1/2 Truck Bed' : 'Full Dump Trailer')}
-                                    </span>
-                                  </div>
-                                  <div className="bg-white p-2 rounded border border-slate-200">
-                                    <span className="block text-[8px] font-mono uppercase text-slate-400 font-bold">Est. Volume</span>
-                                    <span className="block text-xs font-black text-slate-800">
-                                      {aiAnalysisResult.volumeCubicYards ? `${aiAnalysisResult.volumeCubicYards} cu yd` : '~4.5 cu yd'}
-                                    </span>
-                                  </div>
-                                  <div className="bg-white p-2 rounded border border-slate-200">
-                                    <span className="block text-[8px] font-mono uppercase text-slate-400 font-bold">Weight Range</span>
-                                    <span className="block text-xs font-black text-slate-800 truncate">
-                                      {aiAnalysisResult.weightEstimate || 'Medium Weight'}
-                                    </span>
-                                  </div>
-                                  <div className="bg-white p-2 rounded border border-slate-200">
-                                    <span className="block text-[8px] font-mono uppercase text-slate-400 font-bold">Crew Estimate</span>
-                                    <span className="block text-xs font-black text-slate-800">
-                                      {aiAnalysisResult.estimatedLaborHours}h Labor ({aiAnalysisResult.crewRecommendation || '2-Person Crew'})
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* Summary Findings */}
-                                <div className="bg-white p-2 rounded border border-slate-200 text-[11px] leading-relaxed text-slate-700">
-                                  <span className="font-bold block text-[9px] uppercase font-mono text-slate-400 mb-0.5">Vision Summary</span>
-                                  <p className="italic text-slate-600">"{aiAnalysisResult.briefAnalysis}"</p>
-                                </div>
-
-                                {/* Detected Item Tags */}
-                                {aiAnalysisResult.itemTags && aiAnalysisResult.itemTags.length > 0 && (
-                                  <div className="space-y-1">
-                                    <span className="text-[9px] font-mono font-bold uppercase text-slate-400 block">Objects Identified:</span>
-                                    <div className="flex flex-wrap gap-1">
-                                      {aiAnalysisResult.itemTags.map((tag, idx) => (
-                                        <span key={idx} className="bg-slate-200/80 text-slate-700 text-[9px] font-semibold px-2 py-0.5 rounded flex items-center gap-1">
-                                          <span>{tag.name}</span>
-                                          <span className="font-bold text-[#ff6600]">×{tag.quantity}</span>
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Safety & Handling Observations */}
-                                {aiAnalysisResult.safetyFlags && aiAnalysisResult.safetyFlags.length > 0 && (
-                                  <div className="flex flex-wrap gap-1">
-                                    {aiAnalysisResult.safetyFlags.map((flag, idx) => (
-                                      <span key={idx} className="bg-amber-50 text-amber-800 border border-amber-200 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase font-mono">
-                                        ⚠️ {flag}
-                                      </span>
-                                    ))}
-                                    {aiAnalysisResult.recyclableDetected && (
-                                      <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase font-mono">
-                                        ♻️ Metal/Salvage Opportunity
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-
-                                 {/* Landfill Non-Haulable Prohibited Items Warning Banner */}
-                                 {(aiAnalysisResult.hasProhibitedItems || (aiAnalysisResult.prohibitedItemsDetected && aiAnalysisResult.prohibitedItemsDetected.length > 0)) && (
-                                   <div className="bg-red-50 border-2 border-red-300 rounded-lg p-2.5 text-xs text-red-900 space-y-1.5 shadow-xs animate-in fade-in">
-                                     <div className="flex items-center justify-between">
-                                       <span className="flex items-center gap-1.5 font-black text-red-700 font-mono text-[10px] uppercase">
-                                         <Ban className="w-3.5 h-3.5 text-red-600 shrink-0 stroke-[2.5]" />
-                                         <span>Non-Haulable Items Detected</span>
-                                       </span>
-                                       <span className="text-[9px] bg-red-200 text-red-900 font-bold px-1.5 py-0.5 rounded font-mono uppercase">
-                                         Dump Prohibited
-                                       </span>
-                                     </div>
-                                     <p className="text-[11px] text-red-800 leading-snug">
-                                       The following item(s) are <strong>not accepted by the landfill</strong> and cannot be hauled by our crew:
-                                     </p>
-                                     <div className="flex flex-wrap gap-1">
-                                       {(aiAnalysisResult.prohibitedItemsDetected || []).map((item, idx) => (
-                                         <span key={idx} className="bg-red-150 text-red-900 font-mono font-bold text-[9px] px-2 py-0.5 rounded border border-red-300 flex items-center gap-1">
-                                           <span className="text-red-700">✕</span> {item}
-                                         </span>
-                                       ))}
-                                     </div>
-                                     <button
-                                       type="button"
-                                       onClick={() => {
-                                         setLegalDocType('prohibited');
-                                         setLegalModalOpen(true);
-                                       }}
-                                       className="text-[10px] text-red-700 font-bold underline hover:text-red-900 cursor-pointer flex items-center gap-1 pt-0.5"
-                                     >
-                                       <span>View all 20 Sebastian County Landfill Prohibited Items →</span>
-                                     </button>
-                                   </div>
-                                 )}
-
-                                {/* Auto-Fill Description Quick Action */}
-                                {aiAnalysisResult.suggestedDescription && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setJunkDescription(aiAnalysisResult.suggestedDescription || '')}
-                                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono text-[9px] font-bold py-1.5 px-2 rounded border border-slate-200 flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                                  >
-                                    <Sparkles className="w-3 h-3 text-[#ff6600]" />
-                                    <span>Apply AI Suggested Description Below</span>
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              /* Empty State */
-                              <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-2 text-slate-400">
-                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                                  <Info className="w-5 h-5" />
-                                </div>
-                                <div className="space-y-1">
-                                  <p className="font-bold text-xs text-slate-600">No Debris Picture Loaded</p>
-                                  <p className="text-[10px] text-slate-400 max-w-[240px] leading-tight">
-                                    Upload your photo to trigger instant Gemini AI volumetric & vehicle estimation.
-                                  </p>
-                                </div>
-                                <div className="pt-2 text-[9px] text-slate-400 font-mono space-y-0.5">
-                                  <div>✓ Automatic cubic yard estimate</div>
-                                  <div>✓ Truck vs. Trailer classification</div>
-                                  <div>✓ Crew safety & labor calculation</div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                          {/* Hazardous / Trash Materials */}
+                          <button
+                            type="button"
+                            onClick={() => setHazardMaterials(prev => !prev)}
+                            className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer flex items-start gap-3 ${hazardMaterials ? 'border-amber-500 bg-amber-50/30 ring-2 ring-amber-400/20' : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'}`}
+                          >
+                            <span className="text-2xl select-none mt-0.5">âš ï¸</span>
+                            <div className="flex-1">
+                              <span className="block font-black text-sm text-slate-900 uppercase">Special Handling Required</span>
+                              <span className="block text-[11px] text-slate-500 font-medium mt-0.5">Bagged trash, asbestos-adjacent, or hazardous materials</span>
+                            </div>
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${hazardMaterials ? 'border-amber-500 bg-amber-500' : 'border-slate-300'}`}>
+                              {hazardMaterials && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                            </div>
+                          </button>
                         </div>
 
-                        {/* Description Box (Underneath the smart AI boxes) */}
-                        <div className="space-y-1.5 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                          <div className="flex items-center justify-between">
-                            <label className="block text-[10px] font-black uppercase text-slate-700 font-mono flex items-center gap-1.5">
-                              <span>Describe Your Scrap, Waste, or Trash Pile</span>
-                              {aiAnalysisResult && junkDescription && (
-                                <span className="text-[9px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded font-mono flex items-center gap-1">
-                                  <Check className="w-2.5 h-2.5" /> AI Assisted
-                                </span>
-                              )}
-                            </label>
-                            <span className="text-[9px] text-slate-400 font-mono">Optional extra notes</span>
-                          </div>
+                        {/* Scale Weigh-In notice for trailers */}
+                        {haulType === 'trailer' && (
+                          <button
+                            type="button"
+                            onClick={() => setScaleWeighIn(prev => !prev)}
+                            className={`w-full p-4 rounded-xl border-2 text-left transition-all cursor-pointer flex items-start gap-3 ${scaleWeighIn ? 'border-slate-700 bg-slate-50 ring-2 ring-slate-300' : 'border-dashed border-slate-300 hover:border-slate-400 bg-slate-50/50'}`}
+                          >
+                            <span className="text-2xl select-none mt-0.5">âš–ï¸</span>
+                            <div className="flex-1">
+                              <span className="block font-black text-sm text-slate-900 uppercase">Scale Weigh-In (Trailer Jobs)</span>
+                              <span className="block text-[11px] text-slate-500 font-medium mt-0.5">
+                                My load may need to be weighed at the facility. I understand a per-ton rate may be billed post-job if applicable.
+                              </span>
+                            </div>
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${scaleWeighIn ? 'border-slate-700 bg-slate-700' : 'border-slate-300'}`}>
+                              {scaleWeighIn && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                            </div>
+                          </button>
+                        )}
+
+                        {/* Debris description */}
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-black uppercase text-slate-600 font-mono">
+                            Describe Your Load (Optional)
+                          </label>
                           <textarea
                             value={junkDescription}
                             onChange={(e) => setJunkDescription(e.target.value)}
-                            placeholder="Example: Old metal grill, 2 broken plastic chairs, wood boards, washing machine, and 5 bags of garden leaves..."
-                            rows={2}
-                            className="w-full px-3 py-2 border rounded text-xs border-slate-300 bg-white focus:ring-1 focus:ring-[#ff6600] outline-none"
+                            placeholder="e.g. Old couch, 2 mattresses, boxes of clothes, broken shelving..."
+                            rows={3}
+                            className="w-full px-3 py-2 border-2 border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#ff6600] focus:border-transparent resize-none"
                           />
                         </div>
                       </div>
                     )}
 
-                    {/* SLIDE 4: LABOR HOURS & PRICE APPROVAL */}
+                    {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SLIDE 4: SCHEDULE + CONTACT (MERGED) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
                     {currentSlide === 4 && (
-                      <div className="space-y-4">
-                        <div>
-                          <h3 className="text-lg font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-[#ff6600]" />
-                            Real Cost Breakdown
-                          </h3>
-                          <p className="text-xs text-slate-500 font-medium">
-                            We calculate realistic operational expenses based on gas mileage, actual local landfill rates, and dedicated crew labor hours.
-                          </p>
-                        </div>
-
-                        {!isCostCalculated ? (
-                          /* Cost is NOT calculated yet - Show CTA */
-                          <div className="space-y-4">
-                            <div className="p-5 bg-slate-50 border-2 border-dashed border-[#1a1a1a] rounded-lg text-center space-y-3">
-                              <p className="text-xs text-slate-600 font-semibold leading-relaxed">
-                                Ready to calculate your absolute exact quote including dynamic Arkansas transit mileage fuel, landfill gates, and licensed crew labor?
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIsCostCalculated(true);
-                                  setPriceApproved(true);
-                                  setValidationErrors(prev => ({ ...prev, price: '' }));
-                                }}
-                                className="w-full bg-[#ff6600] text-[#1a1a1a] hover:bg-orange-600 py-3.5 px-6 rounded text-sm font-black uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_0px_#1a1a1a] border-2 border-[#1a1a1a]"
-                              >
-                                <span>Calculate Grand Total & Open Live Invoice</span>
-                              </button>
-                            </div>
-
-                            <div className="bg-slate-50 p-4 border rounded text-xs text-slate-500 space-y-2">
-                              <span className="font-mono font-black text-[9px] uppercase block text-slate-400">Pre-Calculation Estimates:</span>
-                              <div className="flex justify-between">
-                                <span>Transit Mileage Leg (Fort Smith):</span>
-                                <span className="font-bold text-slate-700 font-mono">{routeMetrics.total} Roundtrip Miles</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Selected Landfill Catalog Items:</span>
-                                <span className="font-bold text-slate-700 font-mono">
-                                  {Object.values(itemQuantities).reduce((a, b) => a + b, 0)} items
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Crew Labor Assignment:</span>
-                                <span className="font-bold text-slate-700 font-mono">Fixed {laborHours}h Crew Slot</span>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          /* Cost is calculated - Hide the estimate panel and show Stripe checkout / pay on arrival options */
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.98 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="space-y-4"
-                          >
-                            <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg text-xs flex justify-between items-center font-mono font-bold">
-                              <span>✓ COMPLETE INVOICE QUOTE GENERATED</span>
-                              <span className="text-[#ff6600] font-black">${pricing.total.toFixed(2)}</span>
-                            </div>
-
-                            {/* Payment option picker */}
-                            <div className="space-y-2">
-                              <label className="block text-[10px] font-black uppercase text-slate-600 font-mono">
-                                Select Your Payment Terms
-                              </label>
-                              <div className="grid grid-cols-2 gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => setPaymentOption('stripe')}
-                                  className={`p-3 border-2 rounded text-left transition-all relative flex flex-col justify-between ${paymentOption === 'stripe' ? 'border-[#ff6600] bg-orange-50/10' : 'border-[#1a1a1a] hover:bg-slate-50'}`}
-                                >
-                                  <span className="block font-black text-xs uppercase text-slate-900">Pay Securely Online</span>
-                                  <span className="block text-[9px] text-slate-450 mt-1">Online Card Authorization (Shopify)</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setPaymentOption('arrival')}
-                                  className={`p-3 border-2 rounded text-left transition-all relative flex flex-col justify-between ${paymentOption === 'arrival' ? 'border-amber-500 bg-amber-50/5' : 'border-[#1a1a1a] hover:bg-slate-50'}`}
-                                >
-                                  <span className="block font-black text-xs uppercase text-slate-900">Pay on Arrival</span>
-                                  <span className="block text-[9px] text-slate-450 mt-1">Cash / Check / Card with Crew onsite</span>
-                                </button>
-                              </div>
-                            </div>
-
-                            {paymentOption === 'stripe' ? (
-                              <div className="p-4 bg-orange-50/50 border border-orange-200 rounded-lg text-xs space-y-2 leading-snug">
-                                <p className="font-bold text-slate-900 flex items-center gap-1.5">
-                                  <CreditCard className="w-4 h-4 text-[#ff6600]" />
-                                  Secure Online Checkout (Shopify Storefront)
-                                </p>
-                                <p className="text-slate-600">
-                                  You will be redirected to complete your payment securely via Shopify Checkout in Step 7 before crew dispatch.
-                                </p>
-                              </div>
-                            ) : (
-                              <div className="p-4 bg-amber-50/50 border border-amber-200 rounded-lg text-xs space-y-1.5 leading-snug">
-                                <p className="font-bold text-amber-900 flex items-center gap-1">
-                                  <Info className="w-4 h-4 text-amber-600" />
-                                  Pay Upon Crew Arrival
-                                </p>
-                                <p className="text-slate-600">
-                                  No credit card required upfront. You will be invoiced on-site upon job completion and can pay by cash, local check, or credit card.
-                                </p>
-                              </div>
-                            )}
-
-                            <div className="p-4 bg-slate-900 text-white rounded-lg flex items-center justify-between">
-                              <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Ready to select a date & scheduling slot?</span>
-                              <button
-                                type="button"
-                                onClick={() => handleNextSlide()}
-                                className="bg-[#ff6600] text-[#1a1a1a] hover:bg-orange-600 px-4 py-2 rounded text-xs font-black uppercase font-mono cursor-pointer"
-                              >
-                                Next: Choose Date ➜
-                              </button>
-                            </div>
-                          </motion.div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* SLIDE 5: RESERVE ARRIVAL WINDOW */}
-                    {currentSlide === 5 && (
-                      <div className="space-y-4">
+                      <div className="space-y-5">
                         <div>
                           <h3 className="text-lg font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
                             <Calendar className="w-5 h-5 text-[#ff6600]" />
-                            Reserve Dispatch Arrival Window
+                            Reserve Your Slot & Contact Info
                           </h3>
                           <p className="text-xs text-slate-500 font-medium">
-                            Select a preferred date and arrival shift for our River Valley cleanup crew.
+                            Pick an arrival window and provide contact details. We'll sync the dispatch to our calendar and have your invoice ready on the next screen.
                           </p>
                         </div>
 
-                        {/* Calendar selections */}
-                        <div className="space-y-3">
+                        {/* Date picker */}
+                        <div className="space-y-2">
                           <label className="block text-xs font-black uppercase text-slate-600 font-mono">Available Crew Dates</label>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {availableDates.map(item => (
@@ -1487,344 +1255,342 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                 type="button"
                                 key={item.dateString}
                                 onClick={() => setSelectedDate(item.dateString)}
-                                className={`p-2.5 rounded border text-center transition-all cursor-pointer ${selectedDate === item.dateString ? 'border-[#ff6600] bg-orange-50/10 text-slate-900 font-extrabold ring-1 ring-[#ff6600]' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}
+                                className={`p-2.5 rounded-lg border text-center transition-all cursor-pointer ${selectedDate === item.dateString ? 'border-[#ff6600] bg-orange-50/10 text-slate-900 font-extrabold ring-1 ring-[#ff6600]' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}
                               >
                                 <span className="block text-[10px] uppercase font-mono font-bold text-slate-400">{item.dayName.substring(0, 3)}</span>
                                 <span className="block text-sm font-black">{item.label}</span>
                               </button>
                             ))}
                           </div>
-
-                          <div className="pt-2">
-                            <label className="block text-xs font-black uppercase text-slate-600 font-mono mb-1.5">Preferred Shift Window</label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedTimeSlot('morning')}
-                                className={`p-3 rounded border text-left transition-all flex items-center justify-between cursor-pointer ${selectedTimeSlot === 'morning' ? 'border-[#ff6600] bg-orange-50/10 text-slate-900 font-extrabold ring-1 ring-[#ff6600]' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}
-                              >
-                                <div>
-                                  <span className="block text-xs font-black uppercase">Morning Window</span>
-                                  <span className="block text-[10px] text-slate-455 mt-0.5">8:00 AM - 12:00 PM Arrival</span>
-                                </div>
-                                <span className="text-xs font-mono font-bold bg-[#ff6600]/10 text-[#ff6600] px-1.5 py-0.5 rounded">High Priority</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setSelectedTimeSlot('afternoon')}
-                                className={`p-3 rounded border text-left transition-all flex items-center justify-between cursor-pointer ${selectedTimeSlot === 'afternoon' ? 'border-[#ff6600] bg-orange-50/10 text-slate-900 font-extrabold ring-1 ring-[#ff6600]' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}
-                              >
-                                <div>
-                                  <span className="block text-xs font-black uppercase">Afternoon Window</span>
-                                  <span className="block text-[10px] text-slate-455 mt-0.5">12:00 PM - 4:00 PM Arrival</span>
-                                </div>
-                                <span className="text-xs font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">Standard</span>
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Quick contact confirmation to lock in booking securely */}
-                          <div className="pt-3 border-t border-slate-200 space-y-3">
-                            <label className="block text-xs font-black uppercase text-slate-700 font-mono">Verify Your Contact Information</label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="space-y-1">
-                                <label className="block text-[9px] font-mono uppercase font-black text-slate-500">Full Name</label>
-                                <input 
-                                  type="text"
-                                  value={contactName}
-                                  onChange={(e) => setContactName(e.target.value)}
-                                  placeholder="Full Name"
-                                  className="w-full px-2.5 py-1.5 border rounded bg-white text-xs focus:ring-1 focus:ring-[#ff6600]"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="block text-[9px] font-mono uppercase font-black text-slate-500">Contact Email</label>
-                                <input 
-                                  type="email"
-                                  value={contactEmail}
-                                  onChange={(e) => setContactEmail(e.target.value)}
-                                  placeholder="customer@example.com"
-                                  className="w-full px-2.5 py-1.5 border rounded bg-white text-xs focus:ring-1 focus:ring-[#ff6600]"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Dynamic Action Sync Button */}
-                          <div className="pt-4">
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!contactName || !contactEmail) {
-                                  setValidationErrors(prev => ({ ...prev, booking: "Please provide a Name and Email to sync the appointment." }));
-                                  return;
-                                }
-                                setValidationErrors(prev => ({ ...prev, booking: "" }));
-                                
-                                // Set syncing states
-                                setStripeProcessing(true); // use stripeProcessing for loading indicator on button
-                                
-                                try {
-                                  // 1. Save to Firebase Database
-                                  const bookingPayload = {
-                                    clientName: contactName,
-                                    clientEmail: contactEmail,
-                                    selectedDate: selectedDate,
-                                    selectedTimeSlot: selectedTimeSlot,
-                                    zipCode: zipCode,
-                                    haulType: haulType,
-                                    description: junkDescription || "River Valley Dispatched Cleanup",
-                                    priceTotal: pricing.total,
-                                    gasCost: pricing.gasCost,
-                                    dumpFees: pricing.dumpFees,
-                                    laborCost: pricing.laborCost,
-                                    appliances: selectedAppliances,
-                                    items: itemQuantities,
-                                    paymentTerms: paymentOption,
-                                    billingAddress: billingAddress
-                                  };
-                                  
-                                  const dbResult = await saveBookingToDatabase(bookingPayload);
-                                  if (dbResult.success) {
-                                    setFirebaseSaved(true);
-                                  }
-                                  
-                                  // 2. Call Google Calendar API / Simulation
-                                  const calResponse = await fetch("/api/add-to-calendar", {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({
-                                      title: `River Valley Cleanup Crew - ${contactName}`,
-                                      description: `Dynamic crew dispatch. Haul type: ${haulType}. Subtotal: $${pricing.total.toFixed(2)}`,
-                                      date: selectedDate,
-                                      timeSlot: selectedTimeSlot,
-                                      address: contactAddress || `ZIP ${zipCode}`,
-                                      clientName: contactName
-                                    })
-                                  });
-                                  
-                                  if (calResponse.ok) {
-                                    setCalendarSynced(true);
-                                  }
-                                  
-                                  // Automatically proceed to Slide 6!
-                                  setTimeout(() => {
-                                    setStripeProcessing(false);
-                                    handleNextSlide();
-                                  }, 1500);
-                                  
-                                } catch (err) {
-                                  console.error("Booking error:", err);
-                                  setStripeProcessing(false);
-                                  // If there is any minor error, proceed anyway for user friendliness
-                                  setFirebaseSaved(true);
-                                  setCalendarSynced(true);
-                                  setTimeout(() => {
-                                    handleNextSlide();
-                                  }, 1000);
-                                }
-                              }}
-                              disabled={stripeProcessing}
-                              className="w-full bg-slate-900 hover:bg-slate-800 text-white border-2 border-slate-900 font-black py-3 px-5 rounded text-xs uppercase font-mono tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_0px_#ff6600]"
-                            >
-                              {stripeProcessing ? (
-                                <span className="flex items-center gap-1.5">
-                                  <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-[#ff6600]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                  </svg>
-                                  Synchronizing Dispatch Ledger...
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1.5">
-                                  <Calendar className="w-4.5 h-4.5 text-[#ff6600]" />
-                                  Sync Google Calendar & Lock In Date
-                                </span>
-                              )}
-                            </button>
-                            {validationErrors.booking && (
-                              <p className="text-xs font-bold text-[#ff6600] flex items-center gap-1 mt-2">
-                                <AlertCircle className="w-3.5 h-3.5" />
-                                {validationErrors.booking}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Synced feedback items */}
-                          {(calendarSynced || firebaseSaved) && (
-                            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs space-y-1.5 text-emerald-900 font-mono font-bold">
-                              {firebaseSaved && <p className="flex items-center gap-1.5">✓ SAVE SUCCESS: Securely registered to Sebastian County Firebase Database</p>}
-                              {calendarSynced && <p className="flex items-center gap-1.5">✓ SYNC SUCCESS: Added dispatch event to Google Calendar</p>}
-                            </div>
-                          )}
-
-                        </div>
-                      </div>
-                    )}
-
-                    {/* SLIDE 6: ADDRESS & CONTACT INFO */}
-                    {currentSlide === 6 && (
-                      <div className="space-y-4">
-                        <div>
-                          <h3 className="text-lg font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
-                            <User className="w-5 h-5 text-[#ff6600]" />
-                            Service Address & Contact Details
-                          </h3>
-                          <p className="text-xs text-slate-500 font-medium">
-                            Provide service address matching target ZIP code <strong className="font-black text-slate-900">{zipCode}</strong> for exact GPS crew routing.
-                          </p>
                         </div>
 
-                        {/* Contact details Inputs */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                          <div className="space-y-1">
-                            <label className="block text-[10px] font-black uppercase text-slate-600 font-mono">Service Site Address</label>
-                            <input 
-                              type="text"
-                              value={contactAddress}
-                              onChange={(e) => {
-                                setContactAddress(e.target.value);
-                                setValidationErrors(prev => ({ ...prev, address: '' }));
-                              }}
-                              placeholder="123 Kinkead Ave"
-                              className={`w-full px-3 py-2 border rounded text-xs font-bold ${validationErrors.address ? 'border-red-500' : 'border-slate-350 bg-white'}`}
-                            />
-                            {validationErrors.address && <p className="text-[10px] font-bold text-red-600">{validationErrors.address}</p>}
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="block text-[10px] font-black uppercase text-slate-600 font-mono">Customer Full Name</label>
-                            <input 
-                              type="text"
-                              value={contactName}
-                              onChange={(e) => {
-                                setContactName(e.target.value);
-                                setValidationErrors(prev => ({ ...prev, name: '' }));
-                              }}
-                              placeholder="Full Name"
-                              className={`w-full px-3 py-2 border rounded text-xs font-bold ${validationErrors.name ? 'border-red-500' : 'border-slate-350 bg-white'}`}
-                            />
-                            {validationErrors.name && <p className="text-[10px] font-bold text-red-600">{validationErrors.name}</p>}
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="block text-[10px] font-black uppercase text-slate-600 font-mono">Mobile Phone (SMS Dispatch)</label>
-                            <input 
-                              type="tel"
-                              value={contactPhone}
-                              onChange={(e) => {
-                                setContactPhone(e.target.value);
-                                setValidationErrors(prev => ({ ...prev, phone: '' }));
-                              }}
-                              placeholder="479-555-0199"
-                              className={`w-full px-3 py-2 border rounded text-xs font-bold ${validationErrors.phone ? 'border-red-500' : 'border-slate-350 bg-white'}`}
-                            />
-                            {validationErrors.phone && <p className="text-[10px] font-bold text-red-600">{validationErrors.phone}</p>}
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="block text-[10px] font-black uppercase text-slate-600 font-mono">Notification Email (Receipt)</label>
-                            <input 
-                              type="email"
-                              value={contactEmail}
-                              onChange={(e) => setContactEmail(e.target.value)}
-                              placeholder="customer@example.com"
-                              className="w-full px-3 py-2 border rounded text-xs font-bold border-slate-350 bg-white"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-1 pt-1">
-                          <label className="block text-[10px] font-black uppercase text-slate-600 font-mono">Special Parking & Crew Access Notes</label>
-                          <textarea 
-                            value={specialNotes}
-                            onChange={(e) => setSpecialNotes(e.target.value)}
-                            placeholder="Provide driveway gate pins, lockbox codes, or pet notes here..."
-                            rows={2}
-                            className="w-full px-3 py-2 border rounded text-xs border-slate-350 bg-white"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* SLIDE 7: LIVE INVOICE & STRIPE CHECKOUT CHOICE */}
-                    {currentSlide === 7 && (
-                      <div className="space-y-4">
-                        <div>
-                          <h3 className="text-lg font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
-                            <ShieldCheck className="w-5 h-5 text-[#ff6600]" />
-                            Secure Dispatch Payment Options
-                          </h3>
-                          <p className="text-xs text-slate-500 font-medium">
-                            Choose whether to pay securely online now via Shopify, or on delivery when our crew arrives at your site.
-                          </p>
-                        </div>
-
-                        {/* Order overview invoice summary */}
-                        <div className="bg-slate-50 p-4 border rounded font-mono text-xs space-y-2">
-                          <p className="text-[#ff6600] font-black text-[10px] uppercase">Final Dispatch Details Summary</p>
-                          <div className="space-y-1 text-slate-600">
-                            <div className="flex justify-between">
-                              <span>Customer:</span>
-                              <span className="font-bold text-slate-900">{contactName}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Service Address:</span>
-                              <span className="font-bold text-slate-900 truncate max-w-[200px]">{contactAddress}, AR {zipCode}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Scheduled Date:</span>
-                              <span className="font-bold text-slate-900">{selectedDate} ({selectedTimeSlot === 'morning' ? '8AM-12PM' : '12PM-4PM'})</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Calculated Transit Fuel:</span>
-                              <span className="font-bold text-slate-900">${pricing.gasCost.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Disposal Landfill Dump Gate:</span>
-                              <span className="font-bold text-slate-900">${pricing.dumpFees.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Estimated Labor rates:</span>
-                              <span className="font-bold text-slate-900">${pricing.laborCost.toFixed(2)}</span>
-                            </div>
-                            <div className="border-t pt-1.5 flex justify-between font-black text-slate-900 text-sm">
-                              <span>Grand Total (with Tax):</span>
-                              <span className="text-[#ff6600]">${pricing.total.toFixed(2)}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Real Stripe Checkout Choice Question */}
-                        <div className="p-4 bg-slate-900 text-white rounded-lg border-2 border-slate-900 space-y-3.5 text-center">
-                          <p className="text-xs font-bold leading-relaxed text-slate-300">
-                            Would you like to pay securely online right now to secure a guaranteed delivery priority, or pay upon crew arrival?
-                          </p>
+                        {/* Time slot */}
+                        <div className="space-y-2">
+                          <label className="block text-xs font-black uppercase text-slate-600 font-mono">Preferred Shift Window</label>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <button
                               type="button"
-                              onClick={handlePayNow}
-                              className="bg-[#ff6600] hover:bg-orange-600 text-slate-900 font-black uppercase text-xs py-2.5 px-4 rounded transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                              onClick={() => setSelectedTimeSlot('morning')}
+                              className={`p-3 rounded-lg border text-left transition-all flex items-center justify-between cursor-pointer ${selectedTimeSlot === 'morning' ? 'border-[#ff6600] bg-orange-50/10 font-extrabold ring-1 ring-[#ff6600]' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}
                             >
-                              <CreditCard className="w-4 h-4" />
-                              <span>Pay Online Now (Shopify)</span>
+                              <div>
+                                <span className="block text-xs font-black uppercase">Morning Window</span>
+                                <span className="block text-[10px] text-slate-500 mt-0.5">8:00 AM â€“ 12:00 PM Arrival</span>
+                              </div>
+                              <span className="text-[10px] font-mono font-bold bg-[#ff6600]/10 text-[#ff6600] px-1.5 py-0.5 rounded">Priority</span>
                             </button>
                             <button
                               type="button"
-                              onClick={handlePayOnArrival}
-                              className="bg-slate-800 hover:bg-slate-750 text-slate-200 font-black uppercase text-xs py-2.5 px-4 rounded transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-slate-700"
+                              onClick={() => setSelectedTimeSlot('afternoon')}
+                              className={`p-3 rounded-lg border text-left transition-all flex items-center justify-between cursor-pointer ${selectedTimeSlot === 'afternoon' ? 'border-[#ff6600] bg-orange-50/10 font-extrabold ring-1 ring-[#ff6600]' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}
                             >
-                              <Clock className="w-4 h-4 text-slate-400" />
-                              <span>Pay on Arrival (Cash/Card)</span>
+                              <div>
+                                <span className="block text-xs font-black uppercase">Afternoon Window</span>
+                                <span className="block text-[10px] text-slate-500 mt-0.5">12:00 PM â€“ 4:00 PM Arrival</span>
+                              </div>
+                              <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">Standard</span>
                             </button>
                           </div>
                         </div>
+
+                        {/* Contact fields */}
+                        <div className="border-t border-slate-200 pt-4 space-y-3">
+                          <label className="block text-xs font-black uppercase text-slate-700 font-mono">Your Contact Information</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="block text-[9px] font-mono uppercase font-black text-slate-500">Full Name *</label>
+                              <input
+                                type="text"
+                                value={contactName}
+                                onChange={(e) => { setContactName(e.target.value); setValidationErrors(prev => ({ ...prev, name: '' })); }}
+                                placeholder="Full Name"
+                                className={`w-full px-2.5 py-1.5 border-2 rounded text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#ff6600] ${validationErrors.name ? 'border-red-500' : 'border-slate-200'}`}
+                              />
+                              {validationErrors.name && <p className="text-[10px] font-bold text-red-600">{validationErrors.name}</p>}
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-[9px] font-mono uppercase font-black text-slate-500">Mobile Phone * (SMS)</label>
+                              <input
+                                type="tel"
+                                value={contactPhone}
+                                onChange={(e) => { setContactPhone(e.target.value); setValidationErrors(prev => ({ ...prev, phone: '' })); }}
+                                placeholder="479-555-0199"
+                                className={`w-full px-2.5 py-1.5 border-2 rounded text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#ff6600] ${validationErrors.phone ? 'border-red-500' : 'border-slate-200'}`}
+                              />
+                              {validationErrors.phone && <p className="text-[10px] font-bold text-red-600">{validationErrors.phone}</p>}
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-[9px] font-mono uppercase font-black text-slate-500">Email * (Invoice Receipt)</label>
+                              <input
+                                type="email"
+                                value={contactEmail}
+                                onChange={(e) => { setContactEmail(e.target.value); setValidationErrors(prev => ({ ...prev, email: '' })); }}
+                                placeholder="customer@example.com"
+                                className={`w-full px-2.5 py-1.5 border-2 rounded text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#ff6600] ${validationErrors.email ? 'border-red-500' : 'border-slate-200'}`}
+                              />
+                              {validationErrors.email && <p className="text-[10px] font-bold text-red-600">{validationErrors.email}</p>}
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-[9px] font-mono uppercase font-black text-slate-500">Service Address *</label>
+                              <input
+                                type="text"
+                                value={contactAddress}
+                                onChange={(e) => { setContactAddress(e.target.value); setValidationErrors(prev => ({ ...prev, address: '' })); }}
+                                placeholder="123 Kinkead Ave"
+                                className={`w-full px-2.5 py-1.5 border-2 rounded text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#ff6600] ${validationErrors.address ? 'border-red-500' : 'border-slate-200'}`}
+                              />
+                              {validationErrors.address && <p className="text-[10px] font-bold text-red-600">{validationErrors.address}</p>}
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="block text-[9px] font-mono uppercase font-black text-slate-500">Special Access / Crew Notes</label>
+                            <textarea
+                              value={specialNotes}
+                              onChange={(e) => setSpecialNotes(e.target.value)}
+                              placeholder="Gate codes, dog in yard, hard-to-find entrance, etc."
+                              rows={2}
+                              className="w-full px-2.5 py-1.5 border-2 border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-[#ff6600] resize-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Calendar sync confirmation feedback */}
+                        {(calendarSynced || firebaseSaved) && (
+                          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs space-y-1 text-emerald-900 font-mono font-bold">
+                            {firebaseSaved && <p className="flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Booking registered in dispatch database</p>}
+                            {calendarSynced && <p className="flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Dispatch event synced to Google Calendar</p>}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SLIDE 5: FINAL INVOICE + BRANCH A / B â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+                    {currentSlide === 5 && (
+                      <div className="space-y-5">
+                        {/* Header */}
+                        <div>
+                          <h3 className="text-lg font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
+                            <ShieldCheck className="w-5 h-5 text-[#ff6600]" />
+                            Your Invoice & Payment Options
+                          </h3>
+                          <p className="text-xs text-slate-500 font-medium">
+                            Here's your complete cost breakdown for the scheduled cleanup job on <strong className="text-slate-700">{selectedDate}</strong>.
+                          </p>
+                        </div>
+
+                        {/* Full itemized invoice â€” FIRST time any $ appears */}
+                        <div className="bg-white border-2 border-[#1a1a1a] rounded-xl overflow-hidden shadow-[3px_3px_0px_0px_#1a1a1a]">
+                          <div className="bg-[#1a1a1a] text-white px-4 py-3 flex items-center justify-between">
+                            <div>
+                              <span className="block font-black text-xs uppercase tracking-widest text-[#ff6600]">River Valley Cleanup Crew</span>
+                              <span className="block text-[10px] text-slate-400 font-mono">{contactAddress ? `${contactAddress}, AR ${zipCode}` : `Fort Smith, AR ${zipCode}`}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="block text-[9px] font-mono text-slate-500 uppercase">Invoice Date</span>
+                              <span className="block text-xs font-bold text-white font-mono">{selectedDate}</span>
+                            </div>
+                          </div>
+                          <table className="w-full text-xs font-mono">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-500 uppercase">
+                                <th className="py-2 px-4 text-left font-black">Description</th>
+                                <th className="py-2 px-4 text-right font-black">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              <tr>
+                                <td className="py-2 px-4">
+                                  <span className="font-bold text-slate-900">Crew Labor ({Math.max(1, Math.ceil(laborHours))} hr{Math.max(1, Math.ceil(laborHours)) > 1 ? 's' : ''} @ $25/hr)</span>
+                                </td>
+                                <td className="py-2 px-4 text-right font-bold text-slate-900">${pricing.laborCost.toFixed(2)}</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 px-4">
+                                  <span className="font-bold text-slate-900">Landfill Gate Fee</span>
+                                  <span className="block text-[10px] text-slate-400">{haulType === 'truck' ? 'Resident minimum charge' : 'Trailer: itemized catalog sum'}</span>
+                                </td>
+                                <td className="py-2 px-4 text-right font-bold text-slate-900">${pricing.gateFee.toFixed(2)}</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 px-4">
+                                  <span className="font-bold text-slate-900">Fuel / Route Transit</span>
+                                  <span className="block text-[10px] text-slate-400">{routeMetrics.total} mi round-trip @ ${gasPrice.toFixed(2)}/gal</span>
+                                </td>
+                                <td className="py-2 px-4 text-right font-bold text-slate-900">${pricing.gasCost.toFixed(2)}</td>
+                              </tr>
+                              {pricing.hazardSurcharge > 0 && (
+                                <tr>
+                                  <td className="py-2 px-4">
+                                    <span className="font-bold text-amber-700">Special Handling Surcharge</span>
+                                    <span className="block text-[10px] text-slate-400">Hazardous / bagged trash category</span>
+                                  </td>
+                                  <td className="py-2 px-4 text-right font-bold text-amber-700">${pricing.hazardSurcharge.toFixed(2)}</td>
+                                </tr>
+                              )}
+                              {yardWasteExtra && (
+                                <tr>
+                                  <td className="py-2 px-4"><span className="font-bold text-slate-900">Yard Waste Processing</span></td>
+                                  <td className="py-2 px-4 text-right font-bold text-slate-900">$55.00</td>
+                                </tr>
+                              )}
+                              {constructionExtra && (
+                                <tr>
+                                  <td className="py-2 px-4"><span className="font-bold text-slate-900">Construction Materials Disposal</span></td>
+                                  <td className="py-2 px-4 text-right font-bold text-slate-900">$70.30</td>
+                                </tr>
+                              )}
+                              {trailerUnloadingExtra && (
+                                <tr>
+                                  <td className="py-2 px-4"><span className="font-bold text-slate-900">Mechanical Trailer Unloading</span></td>
+                                  <td className="py-2 px-4 text-right font-bold text-slate-900">$55.00</td>
+                                </tr>
+                              )}
+                              <tr className="bg-slate-50">
+                                <td className="py-2 px-4 text-slate-600">Arkansas Sales Tax (9.5%)</td>
+                                <td className="py-2 px-4 text-right text-slate-600">${pricing.tax.toFixed(2)}</td>
+                              </tr>
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-[#ff6600]/10 border-t-2 border-[#ff6600]">
+                                <td className="py-3 px-4 font-black text-slate-900 uppercase text-sm tracking-tight">Grand Total</td>
+                                <td className="py-3 px-4 text-right font-black text-[#ff6600] text-xl font-mono">${pricing.total.toFixed(2)}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                          {scaleWeighIn && (
+                            <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-200 text-[10px] font-mono text-amber-800 flex items-center gap-1.5">
+                              <Info className="w-3.5 h-3.5 shrink-0" />
+                              Scale weigh-in flagged. A per-ton rate ($50/ton) may be billed separately upon job completion if applicable.
+                            </div>
+                          )}
+                        </div>
+
+                        {/* â”€â”€â”€ BRANCH A: Total < $100 â€” Pay in Person â”€â”€â”€ */}
+                        {pricing.total < 100 && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-4"
+                          >
+                            <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-xl flex items-start gap-3">
+                              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="font-black text-emerald-900 text-sm uppercase">Small Job â€” No Account Required</p>
+                                <p className="text-xs text-emerald-700 font-medium mt-0.5">
+                                  Since your total is under $100, you can pay in person when our crew arrives â€” no login or deposit needed.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              {/* Primary CTA: Pay in Person */}
+                              <button
+                                type="button"
+                                onClick={handlePayOnArrival}
+                                className="col-span-1 sm:col-span-1 bg-[#ff6600] hover:bg-orange-600 text-[#1a1a1a] font-black uppercase text-xs py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_0px_#1a1a1a] border-2 border-[#1a1a1a]"
+                              >
+                                <Check className="w-4 h-4" />
+                                Pay in Person
+                              </button>
+                              {/* Download Invoice */}
+                              <button
+                                type="button"
+                                onClick={() => { setInvoicePdfReady(true); window.print(); }}
+                                className="bg-slate-900 hover:bg-slate-800 text-white font-black uppercase text-xs py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer border border-slate-700"
+                              >
+                                <Printer className="w-4 h-4 text-[#ff6600]" />
+                                Download Invoice
+                              </button>
+                              {/* Email Invoice */}
+                              <a
+                                href={`mailto:${contactEmail}?subject=River Valley Cleanup Crew Invoice&body=Your cleanup invoice total is $${pricing.total.toFixed(2)} for service on ${selectedDate}.`}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-xs py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                              >
+                                <Mail className="w-4 h-4" />
+                                Email Invoice
+                              </a>
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {/* â”€â”€â”€ BRANCH B: Total >= $100 â€” Account Required + 50% Deposit â”€â”€â”€ */}
+                        {pricing.total >= 100 && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-4"
+                          >
+                            <div className="p-4 bg-slate-900 text-white rounded-xl border-2 border-[#ff6600] space-y-1">
+                              <p className="font-black text-[#ff6600] text-sm uppercase flex items-center gap-2">
+                                <Lock className="w-4 h-4" />
+                                50% Deposit Required to Confirm
+                              </p>
+                              <p className="text-xs text-slate-300 font-medium">
+                                Jobs over $100 require a <strong className="text-white">50% deposit (${(pricing.total / 2).toFixed(2)})</strong> upfront. The remaining <strong className="text-white">${(pricing.total / 2).toFixed(2)}</strong> is collected upon job completion.
+                              </p>
+                            </div>
+
+                            {!currentUser ? (
+                              <div className="space-y-3">
+                                <p className="text-xs text-slate-600 font-semibold text-center">
+                                  Create a free account to pay your deposit and track this job from your dashboard.
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAuthModalInitialRole('customer');
+                                      setAuthModalOpen(true);
+                                    }}
+                                    className="p-3 bg-white border-2 border-[#1a1a1a] rounded-xl font-black text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 transition-all shadow-[2px_2px_0px_0px_#1a1a1a]"
+                                  >
+                                    <svg className="w-5 h-5" viewBox="0 0 48 48"><path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 29.9 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/><path fill="#34A853" d="M6.3 14.7l7 5.1C15.1 16 19.3 13 24 13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 15.9 2 9 8.2 6.3 14.7z"/><path fill="#FBBC05" d="M24 46c5.7 0 10.5-1.9 14.1-5.1l-6.5-5.3C29.9 37 27.1 38 24 38c-5.9 0-10.7-3.9-11.8-9.3L5.2 34C8 40.3 15.4 46 24 46z"/><path fill="#EA4335" d="M44.5 20H24v8.5h11.8C35 32.2 32 35 28.2 35.7l6.5 5.3c3.7-3.4 7.3-8.8 7.3-17z"/></svg>
+                                    Sign in with Google
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAuthModalInitialRole('customer');
+                                      setAuthModalOpen(true);
+                                    }}
+                                    className="p-3 bg-[#ff6600] border-2 border-[#1a1a1a] rounded-xl font-black text-sm text-[#1a1a1a] flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-600 transition-all shadow-[2px_2px_0px_0px_#1a1a1a]"
+                                  >
+                                    <Mail className="w-5 h-5" />
+                                    Create Account with Email
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs flex items-center gap-2 font-bold text-emerald-800">
+                                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  Signed in as {currentUser.email} â€” ready to pay deposit
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handlePayNow}
+                                  className="w-full bg-[#ff6600] hover:bg-orange-600 text-[#1a1a1a] font-black uppercase text-sm py-3.5 px-6 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_0px_#1a1a1a] border-2 border-[#1a1a1a]"
+                                >
+                                  <CreditCard className="w-5 h-5" />
+                                  Pay ${(pricing.total / 2).toFixed(2)} Deposit Now â€” Confirm Job
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveView('user_account')}
+                                  className="w-full bg-slate-900 hover:bg-black text-white font-black uppercase text-xs py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all font-mono"
+                                >
+                                  <LayoutDashboard className="w-4 h-4 text-[#ff6600]" />
+                                  View in My Account Dashboard
+                                </button>
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
                       </div>
                     )}
 
                   </motion.div>
                 </AnimatePresence>
+
               </div>
 
               {/* Back / Next Navigation Controls */}
@@ -1850,7 +1616,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                   </button>
                 ) : (
                   <div className="text-[10px] font-mono text-slate-400 font-bold uppercase">
-                    Select payment option above
+                    Choose payment option above to finalize
                   </div>
                 )}
               </div>
@@ -1900,7 +1666,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                         {haulType === 'truck' ? 'Heavy-Duty flat rate' : 'Trailer items list sum'}
                       </span>
                     </div>
-                    <span className="font-mono text-slate-900">${pricing.dumpFees.toFixed(2)}</span>
+                    <span className="font-mono text-slate-900">${pricing.gateFee.toFixed(2)}</span>
                   </div>
 
                   {/* Dynamic Arkansas transit fuel */}
@@ -1938,7 +1704,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                 <div className="p-4 bg-slate-50 space-y-1.5 text-xs text-slate-600">
                   <div className="flex justify-between">
                     <span>Gross Services Subtotal:</span>
-                    <span className="font-mono font-bold text-slate-800">${(pricing.gasCost + pricing.dumpFees + pricing.laborCost).toFixed(2)}</span>
+                    <span className="font-mono font-bold text-slate-800">${pricing.subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Arkansas Tax & compliance (9.5%):</span>
@@ -2029,7 +1795,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                         </span>
                       </td>
                       <td className="py-2 px-3 text-center font-bold">1x</td>
-                      <td className="py-2 px-3 text-right font-bold">${pricing.dumpFees.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right font-bold">${pricing.gateFee.toFixed(2)}</td>
                     </tr>
                     {haulType === 'trailer' && Object.keys(itemQuantities).some(k => (itemQuantities[k] || 0) > 0) && (
                       Object.keys(itemQuantities).map(k => {
@@ -2057,7 +1823,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
               <div className="p-4 bg-slate-50 rounded border-2 border-[#1a1a1a] space-y-2">
                 <div className="flex justify-between items-center text-xs text-slate-600 font-bold">
                   <span>Gross Services Subtotal:</span>
-                  <span className="font-mono font-bold">${(pricing.gasCost + pricing.dumpFees + pricing.laborCost).toFixed(2)}</span>
+                  <span className="font-mono font-bold">${pricing.subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs text-slate-600 font-bold">
                   <span>Sebastian County compliance Tax (9.5%):</span>
@@ -2129,7 +1895,11 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                     });
                     setUploadedPhotos([]);
                     setSpecialNotes('');
-                    setPriceApproved(null);
+                    setYardWasteExtra(false);
+                    setConstructionExtra(false);
+                    setTrailerUnloadingExtra(false);
+                    setScaleWeighIn(false);
+                    setHazardMaterials(false);
                   }}
                   className="bg-[#ff6600] hover:bg-orange-600 text-[#1a1a1a] font-black uppercase text-xs py-2 rounded text-center flex items-center justify-center gap-1.5 cursor-pointer"
                 >
@@ -2215,7 +1985,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
             >
               Terms &amp; Conditions
             </button>
-            <span className="text-slate-600">•</span>
+            <span className="text-slate-600">â€¢</span>
             <button
               type="button"
               onClick={() => {
@@ -2226,7 +1996,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
             >
               Privacy Policy
             </button>
-            <span className="text-slate-600">•</span>
+            <span className="text-slate-600">â€¢</span>
             <button
               type="button"
               onClick={() => {
@@ -2237,7 +2007,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
             >
               Data Deletion
             </button>
-            <span className="text-slate-600">•</span>
+            <span className="text-slate-600">â€¢</span>
             <a
               href="/privacy.html"
               target="_blank"
