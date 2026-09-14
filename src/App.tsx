@@ -837,7 +837,7 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
             {step === 'wizard' ? (
 
           (() => {
-            const shouldShowInvoiceSidebar = currentSlide === 5 && haulType !== 'appliance';
+            const shouldShowInvoiceSidebar = currentSlide >= 2 && haulType !== null && haulType !== 'appliance';
             return (
               <div className="space-y-5">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -1183,6 +1183,83 @@ Status: ${generatedTicket?.paymentStatus === 'paid' ? 'PAID / DISPATCH READY' : 
                                   </span>
                                 </div>
                               </div>
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {/* Calculated Invoice Presentation right after labor is calculated */}
+                        {haulType && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mt-4 p-4 sm:p-5 bg-white border-2 border-[#1a1a1a] rounded-xl shadow-[3px_3px_0px_0px_#1a1a1a] space-y-3.5"
+                          >
+                            <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                              <div>
+                                <span className="text-[10px] font-mono font-black uppercase tracking-wider text-[#ff6600] block">
+                                  Calculated Job Invoice
+                                </span>
+                                <h4 className="text-sm font-black uppercase text-slate-900">
+                                  {haulType === 'truck' ? 'Standard Truck Load' : haulType === 'trailer' ? 'Trailer Load' : 'Free Appliance Pickup'}
+                                </h4>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[10px] font-mono uppercase text-slate-400 block">Total Due</span>
+                                <span className="text-base sm:text-lg font-black font-mono text-[#ff6600]">
+                                  ${pricing.total.toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Itemized lines */}
+                            <div className="space-y-1.5 text-xs font-mono">
+                              {haulType !== 'appliance' ? (
+                                <>
+                                  <div className="flex justify-between text-slate-700">
+                                    <span>Crew Labor ({Math.max(1, Math.ceil(laborHours))} hr{Math.max(1, Math.ceil(laborHours)) > 1 ? 's' : ''} @ $25/hr):</span>
+                                    <span className="font-bold text-slate-900">${pricing.laborCost.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-slate-700">
+                                    <span>Landfill Gate Fee:</span>
+                                    <span className="font-bold text-slate-900">${pricing.gateFee.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-slate-700">
+                                    <span>Fuel / Transit ({routeMetrics.total} mi round-trip):</span>
+                                    <span className="font-bold text-slate-900">${pricing.gasCost.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-slate-600 text-[11px] pt-1 border-t border-slate-100">
+                                    <span>Arkansas Local Sales Tax (9.5%):</span>
+                                    <span>${pricing.tax.toFixed(2)}</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex justify-between text-emerald-800 font-bold">
+                                  <span>Appliance Scrap Drop-off & Labor:</span>
+                                  <span>$0.00 (100% FREE)</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Under the invoice: Two buttons - Nevermind and Continue */}
+                            <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setHaulType(null);
+                                  setValidationErrors(prev => ({ ...prev, haulType: '' }));
+                                }}
+                                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black uppercase text-xs rounded-lg border border-slate-300 transition-all cursor-pointer text-center"
+                              >
+                                Nevermind
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleNextSlide}
+                                className="w-full py-2.5 px-4 bg-[#ff6600] hover:bg-orange-600 text-[#1a1a1a] font-black uppercase text-xs rounded-lg transition-all cursor-pointer shadow-xs text-center flex items-center justify-center gap-1.5"
+                              >
+                                <span>Continue</span>
+                                <ChevronRight className="w-4 h-4" />
+                              </button>
                             </div>
                           </motion.div>
                         )}

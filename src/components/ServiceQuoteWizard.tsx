@@ -673,36 +673,71 @@ export default function ServiceQuoteWizard() {
             <div className="rounded-3xl border border-slate-200 p-5 bg-white shadow-sm">
               <div className="flex items-center gap-3">
                 <CalendarDays className="h-5 w-5 text-indigo-600" />
-                <h3 className="font-semibold text-slate-900">5. Labor Estimate</h3>
+                <h3 className="font-semibold text-slate-900">5. Calculated Labor & Invoice</h3>
               </div>
-              <p className="text-sm text-slate-500 mt-1">The app chooses a labor charge from the estimated time for the job.</p>
+              <p className="text-sm text-slate-500 mt-1">Labor has been calculated from the route distance and load requirements. Here is your itemized invoice breakdown:</p>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-3xl bg-slate-50 border border-slate-200 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Estimate</p>
                   <p className="mt-2 text-3xl font-semibold text-slate-900">{estimatedMinutes} min</p>
                 </div>
                 <div className="rounded-3xl bg-slate-50 border border-slate-200 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Suggested labor charge</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Suggested Labor Charge</p>
                   <p className="mt-2 text-3xl font-semibold text-slate-900">${laborCost}</p>
                 </div>
               </div>
-              <div className="mt-5 rounded-3xl bg-slate-100 border border-slate-200 p-4 text-sm text-slate-700">
-                <p>Labor is based on distance, load type, trailer cargo complexity, and whether a photo handling adjustment was applied.</p>
+
+              {/* Itemized Invoice Breakdown */}
+              <div className="mt-5 rounded-3xl bg-slate-50 border border-slate-200 p-5 space-y-3 font-mono text-xs">
+                <div className="flex justify-between text-slate-700">
+                  <span>Crew Labor:</span>
+                  <span className="font-bold text-slate-900">${laborCost.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-700">
+                  <span>Landfill / Dump Fee:</span>
+                  <span className="font-bold text-slate-900">${dumpFee.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-700">
+                  <span>Fuel / Route Transit ({distanceMiles?.toFixed(1) || 0} mi):</span>
+                  <span className="font-bold text-slate-900">${gasCost.toFixed(2)}</span>
+                </div>
+                {photoAdjustment > 0 && (
+                  <div className="flex justify-between text-slate-700">
+                    <span>Photo Handling Fee:</span>
+                    <span className="font-bold text-slate-900">${photoAdjustment.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base font-bold text-indigo-900 pt-3 border-t border-slate-200">
+                  <span>Grand Total:</span>
+                  <span className="text-indigo-600">${totalEstimate.toFixed(2)}</span>
+                </div>
               </div>
-              <div className="mt-5 flex flex-col sm:flex-row gap-3">
+
+              {/* Two buttons: Nevermind and Continue */}
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep(1);
+                    setLoadType(null);
+                    setSelectedItems({});
+                    setSelectedAppliances({});
+                    setLaborApproved(false);
+                  }}
+                  className="rounded-3xl border border-slate-300 bg-slate-100 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-all cursor-pointer text-center"
+                >
+                  Nevermind
+                </button>
                 <button
                   type="button"
                   onClick={() => {
                     setLaborApproved(true);
-                    setStatusMessage("Labor estimate approved. You can continue to reserve a slot.");
+                    setStep(6);
                   }}
-                  className="rounded-3xl bg-indigo-600 text-white px-5 py-3 text-sm font-semibold hover:bg-indigo-700 transition-all"
+                  className="rounded-3xl bg-indigo-600 text-white px-5 py-3 text-sm font-semibold hover:bg-indigo-700 transition-all cursor-pointer text-center"
                 >
-                  <Check className="h-4 w-4 mr-2 inline-block" /> Approve Labor Estimate
+                  Continue
                 </button>
-                {laborApproved && (
-                  <div className="rounded-3xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">Labor has been approved. Continue to reserve arrival slot.</div>
-                )}
               </div>
             </div>
           </div>
